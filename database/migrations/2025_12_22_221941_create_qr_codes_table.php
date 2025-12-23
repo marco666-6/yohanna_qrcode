@@ -13,8 +13,8 @@ return new class extends Migration
             $table->string('code')->unique();
             $table->enum('type', ['check_in', 'check_out']);
             $table->foreignId('shift_id')->nullable()->constrained('shifts')->nullOnDelete();
-            $table->timestamp('generated_at');
-            $table->timestamp('expires_at');
+            $table->timestamp('generated_at')->nullable();
+            $table->timestamp('expires_at')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
             

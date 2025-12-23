@@ -200,14 +200,14 @@ Replace isi file `bootstrap/app.php` dengan yang sudah saya buat.
 
 ### 5. Update config/app.php
 
-Tambahkan di `providers` (jika belum otomatis):
+Tambahkan di `bootstrap/providers` (jika belum otomatis):
 ```php
-'providers' => ServiceProvider::defaultProviders()->merge([
-    // ... providers lain
+return [
+    App\Providers\AppServiceProvider::class,
     SimpleSoftwareIO\QrCode\QrCodeServiceProvider::class,
     Maatwebsite\Excel\ExcelServiceProvider::class,
     Barryvdh\DomPDF\ServiceProvider::class,
-])->toArray(),
+];
 ```
 
 Tambahkan di `aliases`:
@@ -266,7 +266,7 @@ Buat route test di `routes/web.php`:
 Route::get('/test-email', function() {
     try {
         Mail::raw('Test email dari sistem absensi', function($message) {
-            $message->to('test@example.com')
+            $message->to('marcophilips73@gmail.com')
                     ->subject('Test Email');
         });
         return 'Email berhasil dikirim!';
