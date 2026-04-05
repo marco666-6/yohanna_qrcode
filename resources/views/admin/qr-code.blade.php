@@ -1,203 +1,157 @@
 @extends('layouts.app')
 
-@section('title', 'QR Code Generator')
-
-@section('sidebar')
-    <li class="nav-item">
-        <a class="nav-link" href="{{ route('admin.dashboard') }}">
-            <i class="bi bi-speedometer2"></i> Dashboard
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="{{ route('admin.employees') }}">
-            <i class="bi bi-people"></i> Kelola Karyawan
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="{{ route('admin.shifts') }}">
-            <i class="bi bi-clock-history"></i> Kelola Shift
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="{{ route('admin.attendances') }}">
-            <i class="bi bi-calendar-check"></i> Kelola Kehadiran
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link active" href="{{ route('admin.qr-code') }}">
-            <i class="bi bi-qr-code"></i> QR Code
-        </a>
-    </li>
-@endsection
+@section('title', 'QR Code Shift')
+@section('page-kicker', 'QR Attendance Control')
+@section('page-title', 'QR Code Shift')
+@section('page-subtitle', 'Fokuskan tampilan pada QR yang sedang aktif, dengan status window absensi yang jelas per shift dan tipe scan.')
 
 @section('content')
-<div class="row">
-    <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h2 class="page-title mb-1">
-                    <i class="bi bi-qr-code me-2"></i>
-                    QR Code Generator
-                </h2>
-                <p class="text-muted mb-0">Generate dan kelola QR Code untuk absensi</p>
-            </div>
-            <div>
-                <button type="button" class="btn btn-success" onclick="autoGenerateQR()">
-                    <i class="bi bi-lightning-charge me-2"></i>
-                    Auto Generate
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+@php
+    $shiftPayload = $shifts->map(function ($shift) {
+        return [
+            'id' => $shift->id,
+            'name' => $shift->name,
+            'start_time' => formatTime($shift->start_time),
+            'end_time' => formatTime($shift->end_time),
+            'check_in' => [
+                'start' => getAttendanceWindow($shift, 'check_in')['start']->format('H:i'),
+                'end' => getAttendanceWindow($shift, 'check_in')['end']->format('H:i'),
+                'is_open' => getAttendanceWindow($shift, 'check_in')['is_open'],
+            ],
+            'check_out' => [
+                'start' => getAttendanceWindow($shift, 'check_out')['start']->format('H:i'),
+                'end' => getAttendanceWindow($shift, 'check_out')['end']->format('H:i'),
+                'is_open' => getAttendanceWindow($shift, 'check_out')['is_open'],
+            ],
+        ];
+    })->values();
+@endphp
 
-<!-- Info Cards -->
-<div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <div class="card border-primary">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div class="flex-shrink-0">
-                        <i class="bi bi-info-circle text-primary" style="font-size: 2rem;"></i>
-                    </div>
-                    <div class="flex-grow-1 ms-3">
-                        <h6 class="mb-1">Durasi QR Code</h6>
-                        <p class="mb-0 text-muted small">QR Code berlaku selama <strong>30 detik</strong></p>
-                    </div>
-                </div>
+<div class="d-grid gap-4">
+    <div class="row g-3">
+        <div class="col-6 col-xl-3">
+            <div class="stat-card primary">
+                <div class="stat-icon"><i class="bi bi-qr-code"></i></div>
+                <div class="stat-value">{{ config('attendance.qr_code_expiry_seconds') }}</div>
+                <div class="stat-label">Durasi QR aktif</div>
+                <div class="stat-helper">Detik sebelum QR harus digenerate ulang.</div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="stat-card success">
+                <div class="stat-icon"><i class="bi bi-box-arrow-in-right"></i></div>
+                <div class="stat-value">{{ config('attendance.qr_code_before_minutes') }}</div>
+                <div class="stat-label">Window sebelum shift</div>
+                <div class="stat-helper">Menit sebelum jam target absensi.</div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="stat-card warning">
+                <div class="stat-icon"><i class="bi bi-box-arrow-right"></i></div>
+                <div class="stat-value">{{ config('attendance.qr_code_after_minutes') }}</div>
+                <div class="stat-label">Window sesudah shift</div>
+                <div class="stat-helper">Menit setelah jam target absensi.</div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="stat-card info">
+                <div class="stat-icon"><i class="bi bi-diagram-3"></i></div>
+                <div class="stat-value">{{ $shifts->count() }}</div>
+                <div class="stat-label">Shift aktif</div>
+                <div class="stat-helper">Siap dipilih untuk check-in/check-out.</div>
             </div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card border-success">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div class="flex-shrink-0">
-                        <i class="bi bi-clock text-success" style="font-size: 2rem;"></i>
-                    </div>
-                    <div class="flex-grow-1 ms-3">
-                        <h6 class="mb-1">Window Absensi</h6>
-                        <p class="mb-0 text-muted small"><strong>30 menit</strong> sebelum hingga <strong>45 menit</strong> sesudah</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card border-warning">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div class="flex-shrink-0">
-                        <i class="bi bi-arrow-clockwise text-warning" style="font-size: 2rem;"></i>
-                    </div>
-                    <div class="flex-grow-1 ms-3">
-                        <h6 class="mb-1">Auto Refresh</h6>
-                        <p class="mb-0 text-muted small">QR Code refresh otomatis setiap <strong>30 detik</strong></p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
-<!-- QR Code Generation Section -->
-<div class="row g-3 mb-4">
-    @foreach($shifts as $shift)
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">
-                    <i class="bi bi-clock me-2"></i>
-                    {{ $shift->name }}
-                </h5>
-                <small>{{ formatTime($shift->start_time) }} - {{ formatTime($shift->end_time) }}</small>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <!-- Check-in QR -->
-                    <div class="col-md-6">
-                        <div class="text-center">
-                            <h6 class="text-success">
-                                <i class="bi bi-box-arrow-in-right me-2"></i>
-                                Check-in
-                            </h6>
-                            <div id="qr-checkin-{{ $shift->id }}" class="qr-container mb-3">
-                                <div class="qr-placeholder">
-                                    <i class="bi bi-qr-code" style="font-size: 3rem;"></i>
-                                    <p class="mt-2 text-muted">Tidak ada QR aktif</p>
+    <div class="row g-4">
+        <div class="col-xl-8">
+            <div class="card h-100">
+                <div class="card-header d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+                    <div>
+                        <div class="fw-bold fs-5">QR aktif yang sedang difokuskan</div>
+                        <div class="small text-muted">Tampilan besar agar lebih jelas saat ditunjukkan ke karyawan.</div>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <select class="form-select" id="shiftSelector" style="min-width:180px;">
+                            @foreach($shifts as $shift)
+                                <option value="{{ $shift->id }}">{{ $shift->name }} ({{ formatTime($shift->start_time) }} - {{ formatTime($shift->end_time) }})</option>
+                            @endforeach
+                        </select>
+                        <select class="form-select" id="typeSelector" style="min-width:160px;">
+                            <option value="check_in">Check-in</option>
+                            <option value="check_out">Check-out</option>
+                        </select>
+                        <button type="button" class="btn btn-primary" onclick="generateSelectedQR()">Generate / Regenerate</button>
+                        <button type="button" class="btn btn-outline-primary" onclick="autoGenerateQR()">Auto Generate</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="qr-focus-shell">
+                        <div class="row g-4 align-items-center">
+                            <div class="col-lg-7">
+                                <div id="activeQrPreview" class="active-qr-preview">
+                                    <div class="empty-state">
+                                        <i class="bi bi-qr-code"></i>
+                                        <div class="fw-semibold mb-1">Belum ada QR aktif</div>
+                                        <div class="small">Pilih shift dan tipe lalu generate saat window terbuka.</div>
+                                    </div>
                                 </div>
                             </div>
-                            <button type="button" 
-                                    class="btn btn-success btn-sm w-100" 
-                                    onclick="generateQR({{ $shift->id }}, 'check_in')">
-                                <i class="bi bi-qr-code me-2"></i>
-                                Generate Check-in
-                            </button>
-                            <div id="timer-checkin-{{ $shift->id }}" class="mt-2 text-muted small"></div>
-                        </div>
-                    </div>
-
-                    <!-- Check-out QR -->
-                    <div class="col-md-6">
-                        <div class="text-center">
-                            <h6 class="text-danger">
-                                <i class="bi bi-box-arrow-right me-2"></i>
-                                Check-out
-                            </h6>
-                            <div id="qr-checkout-{{ $shift->id }}" class="qr-container mb-3">
-                                <div class="qr-placeholder">
-                                    <i class="bi bi-qr-code" style="font-size: 3rem;"></i>
-                                    <p class="mt-2 text-muted">Tidak ada QR aktif</p>
+                            <div class="col-lg-5">
+                                <div class="data-summary d-grid gap-3">
+                                    <div class="data-summary-item">
+                                        <div class="small text-muted">Shift</div>
+                                        <div class="fw-semibold" id="activeShiftName">-</div>
+                                    </div>
+                                    <div class="data-summary-item">
+                                        <div class="small text-muted">Tipe QR</div>
+                                        <div class="fw-semibold" id="activeQrType">-</div>
+                                    </div>
+                                    <div class="data-summary-item">
+                                        <div class="small text-muted">Status window</div>
+                                        <div class="fw-semibold" id="activeWindowStatus">-</div>
+                                    </div>
+                                    <div class="data-summary-item">
+                                        <div class="small text-muted">Countdown</div>
+                                        <div class="fw-semibold" id="activeCountdown">Belum ada QR aktif</div>
+                                    </div>
                                 </div>
                             </div>
-                            <button type="button" 
-                                    class="btn btn-danger btn-sm w-100" 
-                                    onclick="generateQR({{ $shift->id }}, 'check_out')">
-                                <i class="bi bi-qr-code me-2"></i>
-                                Generate Check-out
-                            </button>
-                            <div id="timer-checkout-{{ $shift->id }}" class="mt-2 text-muted small"></div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
-    @endforeach
-</div>
 
-<!-- Help Section -->
-<div class="card">
-    <div class="card-header bg-info text-white">
-        <h5 class="mb-0">
-            <i class="bi bi-question-circle me-2"></i>
-            Panduan Penggunaan
-        </h5>
-    </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-6">
-                <h6 class="text-primary">Manual Generate</h6>
-                <ol>
-                    <li>Pilih shift yang ingin digenerate QR Code</li>
-                    <li>Klik tombol "Generate Check-in" atau "Generate Check-out"</li>
-                    <li>QR Code akan muncul dan berlaku selama 30 detik</li>
-                    <li>Karyawan dapat scan QR Code menggunakan aplikasi</li>
-                </ol>
+        <div class="col-xl-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <div class="fw-bold fs-5">Ringkasan window shift</div>
+                </div>
+                <div class="card-body d-grid gap-3">
+                    @foreach($shifts as $shift)
+                        @php
+                            $checkInWindow = getAttendanceWindow($shift, 'check_in');
+                            $checkOutWindow = getAttendanceWindow($shift, 'check_out');
+                        @endphp
+                        <div class="data-summary-item">
+                            <div class="d-flex justify-content-between align-items-start gap-3">
+                                <div>
+                                    <div class="fw-semibold">{{ $shift->name }}</div>
+                                    <div class="small text-muted">{{ formatTime($shift->start_time) }} - {{ formatTime($shift->end_time) }}</div>
+                                </div>
+                                <span class="badge rounded-pill {{ $checkInWindow['is_open'] || $checkOutWindow['is_open'] ? 'badge-soft-success' : 'badge-soft-danger' }}">
+                                    {{ $checkInWindow['is_open'] || $checkOutWindow['is_open'] ? 'Ada window aktif' : 'Tertutup' }}
+                                </span>
+                            </div>
+                            <div class="small text-muted mt-2">
+                                Check-in: {{ $checkInWindow['start']->format('H:i') }} - {{ $checkInWindow['end']->format('H:i') }}<br>
+                                Check-out: {{ $checkOutWindow['start']->format('H:i') }} - {{ $checkOutWindow['end']->format('H:i') }}
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
             </div>
-            <div class="col-md-6">
-                <h6 class="text-success">Auto Generate</h6>
-                <ol>
-                    <li>Klik tombol "Auto Generate" di pojok kanan atas</li>
-                    <li>Sistem akan otomatis generate QR untuk semua shift aktif</li>
-                    <li>QR hanya muncul dalam window absensi (30 menit sebelum - 45 menit sesudah)</li>
-                    <li>QR akan refresh otomatis setiap 30 detik</li>
-                </ol>
-            </div>
-        </div>
-        <div class="alert alert-warning mt-3 mb-0">
-            <i class="bi bi-exclamation-triangle me-2"></i>
-            <strong>Penting:</strong> Pastikan QR Code ditampilkan di lokasi yang mudah diakses karyawan saat check-in/check-out.
         </div>
     </div>
 </div>
@@ -205,49 +159,27 @@
 
 @push('styles')
 <style>
-    .qr-container {
-        min-height: 250px;
-        border: 2px dashed #dee2e6;
-        border-radius: 12px;
+    .qr-focus-shell {
+        padding: 1rem;
+        border-radius: 26px;
+        background: linear-gradient(180deg, rgba(201,117,112,.07), rgba(255,255,255,.95));
+        border: 1px solid rgba(129,101,104,.1);
+    }
+    .active-qr-preview {
+        min-height: 460px;
+        border-radius: 28px;
+        border: 1px dashed rgba(129,101,104,.2);
+        background: linear-gradient(135deg, #fff7f6, #fbf1ef);
         display: flex;
         align-items: center;
         justify-content: center;
-        background-color: #f8f9fa;
-        padding: 20px;
-    }
-
-    .qr-placeholder {
+        padding: 24px;
         text-align: center;
-        color: #6c757d;
     }
-
-    .qr-container img {
+    .active-qr-preview canvas,
+    .active-qr-preview img {
         max-width: 100%;
         height: auto;
-        border-radius: 8px;
-    }
-
-    .qr-active {
-        border-color: #198754;
-        background-color: #d1e7dd;
-    }
-
-    .qr-expired {
-        border-color: #dc3545;
-        background-color: #f8d7da;
-    }
-
-    .countdown {
-        font-weight: bold;
-        font-size: 1.1rem;
-    }
-
-    .countdown.warning {
-        color: #ffc107;
-    }
-
-    .countdown.danger {
-        color: #dc3545;
     }
 </style>
 @endpush
@@ -255,178 +187,174 @@
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-    let timers = {};
+    const shiftData = @json($shiftPayload);
+    let currentTimer = null;
+    let currentActive = null;
+    let isGeneratingAutomatically = false;
 
-    // Generate QR Code
-    function generateQR(shiftId, type) {
-        $.ajax({
-            url: '/qr-code/generate',
-            method: 'POST',
-            data: {
-                shift_id: shiftId,
-                type: type
-            },
-            success: function(response) {
-                if (response.success) {
-                    displayQRCode(shiftId, type, response.code, response.expires_at);
-                    
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'QR Code Generated',
-                        text: 'QR Code berhasil dibuat dan siap digunakan',
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-                }
-            },
-            error: function(xhr) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Gagal',
-                    text: 'Gagal membuat QR Code. Silakan coba lagi.',
-                    confirmButtonColor: '#dc3545'
-                });
-            }
-        });
+    function getSelectedShift() {
+        const shiftId = Number(document.getElementById('shiftSelector').value);
+        return shiftData.find(shift => shift.id === shiftId);
     }
 
-    // Display QR Code
-    function displayQRCode(shiftId, type, code, expiresAt) {
-        const containerId = `qr-${type.replace('_', '')}-${shiftId}`;
-        const timerContainerId = `timer-${type.replace('_', '')}-${shiftId}`;
-        const container = document.getElementById(containerId);
-        
-        // Clear existing content
-        container.innerHTML = '';
-        container.classList.add('qr-active');
-        
-        // Generate QR Code
-        new QRCode(container, {
-            text: code,
-            width: 200,
-            height: 200,
-            colorDark: "#000000",
-            colorLight: "#ffffff",
+    function getSelectedType() {
+        return document.getElementById('typeSelector').value;
+    }
+
+    function updateSelectionInfo() {
+        const shift = getSelectedShift();
+        const type = getSelectedType();
+        if (!shift) return;
+        const windowData = shift[type];
+        document.getElementById('activeShiftName').textContent = `${shift.name} (${shift.start_time} - ${shift.end_time})`;
+        document.getElementById('activeQrType').textContent = type === 'check_in' ? 'Check-in' : 'Check-out';
+        document.getElementById('activeWindowStatus').textContent = windowData.is_open
+            ? `Window terbuka (${windowData.start} - ${windowData.end})`
+            : `Window tertutup (${windowData.start} - ${windowData.end})`;
+        if (!currentActive || currentActive.shift_id !== shift.id || currentActive.type !== type) {
+            document.getElementById('activeCountdown').textContent = 'Belum ada QR aktif untuk pilihan ini';
+        }
+    }
+
+    function renderActiveQr(payload) {
+        currentActive = payload;
+        const preview = document.getElementById('activeQrPreview');
+        preview.innerHTML = '<div id="qrCanvasMount"></div>';
+        new QRCode(document.getElementById('qrCanvasMount'), {
+            text: payload.code,
+            width: 320,
+            height: 320,
+            colorDark: '#4a2f32',
+            colorLight: '#ffffff',
             correctLevel: QRCode.CorrectLevel.H
         });
-
-        // Start countdown timer
-        startCountdown(timerContainerId, expiresAt, shiftId, type);
+        document.getElementById('activeShiftName').textContent = payload.shift_name;
+        document.getElementById('activeQrType').textContent = payload.type === 'check_in' ? 'Check-in' : 'Check-out';
+        document.getElementById('activeWindowStatus').textContent = `Window ${payload.window_start} - ${payload.window_end}`;
+        startCountdown(payload.expires_at);
     }
 
-    // Countdown timer
-    function startCountdown(timerId, expiresAt, shiftId, type) {
-        // Clear existing timer
-        if (timers[timerId]) {
-            clearInterval(timers[timerId]);
+    function startCountdown(expiresAt) {
+        if (currentTimer) {
+            clearInterval(currentTimer);
         }
-
-        const timerElement = document.getElementById(timerId);
-        const expiryTime = new Date(expiresAt).getTime();
-
-        timers[timerId] = setInterval(function() {
-            const now = new Date().getTime();
-            const distance = expiryTime - now;
-
-            if (distance < 0) {
-                clearInterval(timers[timerId]);
-                timerElement.innerHTML = '<span class="text-danger">QR Code Expired</span>';
-                
-                const containerId = `qr-${type.replace('_', '')}-${shiftId}`;
-                const container = document.getElementById(containerId);
-                container.classList.remove('qr-active');
-                container.classList.add('qr-expired');
-                
-                setTimeout(() => {
-                    container.innerHTML = `
-                        <div class="qr-placeholder">
-                            <i class="bi bi-qr-code" style="font-size: 3rem;"></i>
-                            <p class="mt-2 text-muted">QR Code Expired</p>
-                        </div>
-                    `;
-                    container.classList.remove('qr-expired');
-                }, 2000);
-            } else {
-                const seconds = Math.floor(distance / 1000);
-                let className = 'countdown';
-                
-                if (seconds <= 10) {
-                    className += ' danger';
-                } else if (seconds <= 20) {
-                    className += ' warning';
-                }
-                
-                timerElement.innerHTML = `<span class="${className}">Berlaku: ${seconds} detik</span>`;
+        currentTimer = setInterval(() => {
+            const diff = new Date(expiresAt).getTime() - Date.now();
+            if (diff <= 0) {
+                clearInterval(currentTimer);
+                document.getElementById('activeCountdown').textContent = 'QR kadaluarsa, silakan generate ulang';
+                return;
             }
-        }, 100);
+            document.getElementById('activeCountdown').textContent = `${Math.floor(diff / 1000)} detik tersisa`;
+        }, 200);
     }
 
-    // Auto Generate for all shifts
+    function generateSelectedQR() {
+        const shift = getSelectedShift();
+        const type = getSelectedType();
+        $.post('/qr-code/generate', { shift_id: shift.id, type })
+            .done(response => {
+                renderActiveQr({
+                    shift_id: shift.id,
+                    shift_name: `${shift.name} (${shift.start_time} - ${shift.end_time})`,
+                    type,
+                    code: response.code,
+                    expires_at: response.expires_at,
+                    window_start: shift[type].start,
+                    window_end: shift[type].end
+                });
+                Swal.fire({ icon: 'success', title: 'QR aktif', text: 'QR berhasil dibuat untuk window yang sedang terbuka.', timer: 1800, showConfirmButton: false });
+            })
+            .fail(xhr => {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Window belum terbuka',
+                    text: xhr.responseJSON?.message || 'QR hanya bisa digenerate saat window absensi aktif.'
+                });
+            });
+    }
+
     function autoGenerateQR() {
-        Swal.fire({
-            title: 'Auto Generate QR Code',
-            text: 'Generate QR Code untuk semua shift yang sedang dalam window absensi?',
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonColor: '#198754',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: '<i class="bi bi-check-circle me-2"></i>Ya, Generate',
-            cancelButtonText: '<i class="bi bi-x-circle me-2"></i>Batal'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                $.ajax({
-                    url: '/qr-code/auto-generate',
-                    method: 'GET',
-                    success: function(response) {
-                        if (response.success) {
-                            if (response.generated_count > 0) {
-                                response.codes.forEach(qr => {
-                                    displayQRCode(qr.shift_id, qr.type, qr.code, qr.expires_at);
-                                });
-                                
-                                Swal.fire({
-                                    icon: 'success',
-                                    title: 'Berhasil',
-                                    text: `${response.generated_count} QR Code berhasil digenerate`,
-                                    timer: 2000,
-                                    showConfirmButton: false
-                                });
+        $.get('/qr-code/auto-generate')
+            .done(response => {
+                if (!response.generated_count) {
+                    Swal.fire({ icon: 'info', title: 'Tidak ada window aktif', text: 'Saat ini tidak ada shift yang berada dalam window absensi.' });
+                    return;
+                }
+                const selected = response.codes[0];
+                const shift = shiftData.find(item => item.id === selected.shift_id);
+                document.getElementById('shiftSelector').value = selected.shift_id;
+                document.getElementById('typeSelector').value = selected.type;
+                renderActiveQr({
+                    shift_id: selected.shift_id,
+                    shift_name: `${shift.name} (${shift.start_time} - ${shift.end_time})`,
+                    type: selected.type,
+                    code: selected.code,
+                    expires_at: selected.expires_at,
+                    window_start: shift[selected.type].start,
+                    window_end: shift[selected.type].end
+                });
+                updateSelectionInfo();
+                Swal.fire({ icon: 'success', title: 'Auto generate berhasil', text: `${response.generated_count} QR dibuat sesuai window aktif.`, timer: 1800, showConfirmButton: false });
+            });
+    }
+
+    function loadFocusedActiveQr() {
+        $.get('/qr-code/active')
+            .done(response => {
+                const shift = getSelectedShift();
+                const type = getSelectedType();
+                const active = response.qr_codes.find(qr => Number(qr.shift_id) === shift.id && qr.type === type);
+                if (active) {
+                    isGeneratingAutomatically = false;
+                    renderActiveQr({
+                        shift_id: active.shift_id,
+                        shift_name: `${shift.name} (${shift.start_time} - ${shift.end_time})`,
+                        type: active.type,
+                        code: active.code,
+                        expires_at: active.expires_at,
+                        window_start: shift[active.type].start,
+                        window_end: shift[active.type].end
+                    });
+                } else {
+                    currentActive = null;
+                    document.getElementById('activeQrPreview').innerHTML = `
+                        <div class="empty-state">
+                            <i class="bi bi-qr-code"></i>
+                            <div class="fw-semibold mb-1">Belum ada QR aktif</div>
+                            <div class="small">Generate QR untuk shift dan tipe yang dipilih saat window terbuka.</div>
+                        </div>`;
+                    updateSelectionInfo();
+
+                    if (shift[type].is_open && !isGeneratingAutomatically) {
+                        isGeneratingAutomatically = true;
+                        $.get('/qr-code/auto-generate').done(autoResponse => {
+                            if (autoResponse.generated_count) {
+                                loadFocusedActiveQr();
                             } else {
-                                Swal.fire({
-                                    icon: 'info',
-                                    title: 'Tidak Ada QR',
-                                    text: 'Tidak ada shift yang dalam window absensi saat ini',
-                                    confirmButtonColor: '#0d6efd'
-                                });
+                                isGeneratingAutomatically = false;
                             }
-                        }
-                    },
-                    error: function(xhr) {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Gagal',
-                            text: 'Gagal auto generate QR Code',
-                            confirmButtonColor: '#dc3545'
+                        }).fail(() => {
+                            isGeneratingAutomatically = false;
                         });
                     }
-                });
-            }
-        });
+                }
+            });
     }
 
-    // Load active QR codes on page load
-    $(document).ready(function() {
-        $.ajax({
-            url: '/qr-code/active',
-            method: 'GET',
-            success: function(response) {
-                if (response.success && response.qr_codes.length > 0) {
-                    response.qr_codes.forEach(qr => {
-                        displayQRCode(qr.shift_id, qr.type, qr.code, qr.expires_at);
-                    });
-                }
-            }
-        });
+    document.getElementById('shiftSelector').addEventListener('change', () => {
+        updateSelectionInfo();
+        loadFocusedActiveQr();
+    });
+    document.getElementById('typeSelector').addEventListener('change', () => {
+        updateSelectionInfo();
+        loadFocusedActiveQr();
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        updateSelectionInfo();
+        loadFocusedActiveQr();
+        setInterval(loadFocusedActiveQr, 5000);
     });
 </script>
 @endpush

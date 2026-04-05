@@ -2,34 +2,6 @@
 
 @section('title', 'Kelola Shift')
 
-@section('sidebar')
-    <li class="nav-item">
-        <a class="nav-link" href="{{ route('admin.dashboard') }}">
-            <i class="bi bi-speedometer2"></i> Dashboard
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="{{ route('admin.employees') }}">
-            <i class="bi bi-people"></i> Kelola Karyawan
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link active" href="{{ route('admin.shifts') }}">
-            <i class="bi bi-clock-history"></i> Kelola Shift
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="{{ route('admin.attendances') }}">
-            <i class="bi bi-calendar-check"></i> Kelola Kehadiran
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="{{ route('admin.qr-code') }}">
-            <i class="bi bi-qr-code"></i> QR Code
-        </a>
-    </li>
-@endsection
-
 @section('content')
 <div class="row">
     <div class="col-12">
@@ -141,9 +113,12 @@
                                 @php
                                     $start = \Carbon\Carbon::parse($shift->start_time);
                                     $end = \Carbon\Carbon::parse($shift->end_time);
-                                    $duration = $start->diffInHours($end);
+                                    if ($end->lte($start)) {
+                                        $end->addDay();
+                                    }
+                                    $duration = round($end->diffInMinutes($start) / 60, 2);
                                 @endphp
-                                <strong>{{ $duration }} Jam</strong>
+                                <strong>{{ rtrim(rtrim(number_format($duration, 2), '0'), '.') }} Jam</strong>
                             </td>
                             <td>
                                 <span class="badge bg-warning text-dark">
@@ -444,12 +419,12 @@
         const startTime = document.getElementById('add_start_time').value;
         const endTime = document.getElementById('add_end_time').value;
         
-        if (startTime >= endTime) {
+        if (startTime === endTime) {
             e.preventDefault();
             Swal.fire({
                 icon: 'error',
                 title: 'Waktu Tidak Valid',
-                text: 'Waktu selesai harus lebih besar dari waktu mulai!',
+                text: 'Waktu selesai tidak boleh sama dengan waktu mulai!',
                 confirmButtonColor: '#dc3545'
             });
             return false;
@@ -460,12 +435,12 @@
         const startTime = document.getElementById('edit_start_time').value;
         const endTime = document.getElementById('edit_end_time').value;
         
-        if (startTime >= endTime) {
+        if (startTime === endTime) {
             e.preventDefault();
             Swal.fire({
                 icon: 'error',
                 title: 'Waktu Tidak Valid',
-                text: 'Waktu selesai harus lebih besar dari waktu mulai!',
+                text: 'Waktu selesai tidak boleh sama dengan waktu mulai!',
                 confirmButtonColor: '#dc3545'
             });
             return false;

@@ -49,6 +49,15 @@ class QrCode extends Model
         return $this->is_active && !$this->isExpired();
     }
 
+    public function isWithinWindow()
+    {
+        if (!$this->shift) {
+            return false;
+        }
+
+        return isWithinAttendanceWindow($this->shift, $this->type);
+    }
+
     public function scopeActive($query)
     {
         return $query->where('is_active', true)

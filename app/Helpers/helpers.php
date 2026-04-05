@@ -208,9 +208,61 @@ if (!function_exists('isWithinAttendanceWindow')) {
             ? \Carbon\Carbon::parse($shift->start_time)
             : \Carbon\Carbon::parse($shift->end_time);
         
-        $windowStart = $targetTime->copy()->subMinutes(30);
-        $windowEnd = $targetTime->copy()->addMinutes(45);
+        $windowStart = $targetTime->copy()->subMinutes(config('attendance.qr_code_before_minutes', 30));
+        $windowEnd = $targetTime->copy()->addMinutes(config('attendance.qr_code_after_minutes', 45));
         
         return $now->between($windowStart, $windowEnd);
+    }
+}
+
+if (!function_exists('getAttendanceWindow')) {
+    /**
+     * Return attendance window details for a shift and QR type.
+     */
+    function getAttendanceWindow($shift, $type = 'check_in')
+    {
+        $targetTime = $type === 'check_in'
+            ? \Carbon\Carbon::parse($shift->start_time)
+            : \Carbon\Carbon::parse($shift->end_time);
+
+        $windowStart = $targetTime->copy()->subMinutes(config('attendance.qr_code_before_minutes', 30));
+        $windowEnd = $targetTime->copy()->addMinutes(config('attendance.qr_code_after_minutes', 45));
+
+        return [
+            'target' => $targetTime,
+            'start' => $windowStart,
+            'end' => $windowEnd,
+            'is_open' => now()->between($windowStart, $windowEnd),
+        ];
+    }
+}
+
+if (!function_exists('attendancePercentage')) {
+    /**
+     * Safely calculate a percentage.
+     */
+    function attendancePercentage($value, $total, $decimals = 1)
+    {
+        if ((float) $total <= 0) {
+            return 0;
+        }
+
+        return round(((float) $value / (float) $total) * 100, $decimals);
+    }
+}
+
+if (!function_exists('attendanceStatusIcon')) {
+    /**
+     * Get icon for attendance status.
+     */
+    function attendanceStatusIcon($status)
+    {
+        return match($status) {
+            'on_time' => 'bi-check-circle',
+            'late' => 'bi-alarm',
+            'incomplete' => 'bi-hourglass-split',
+            'absent' => 'bi-x-octagon',
+            default => 'bi-question-circle',
+        };
     }
 }

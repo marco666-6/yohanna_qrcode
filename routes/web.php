@@ -7,11 +7,11 @@ use App\Http\Controllers\HrdController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\QrCodeController;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Mail;
+
+Route::get('/', [AuthController::class, 'showLogin'])->name('login');
 
 // Guest routes (not logged in)
 Route::middleware('guest')->group(function () {
-    Route::get('/', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->name('login.post');
 });
 
@@ -98,16 +98,4 @@ Route::middleware('auth')->group(function () {
     Route::get('/qr-code/auto-generate', [QrCodeController::class, 'autoGenerate'])->name('qr-code.auto-generate');
     Route::get('/qr-code/active', [QrCodeController::class, 'getActive'])->name('qr-code.active');
     Route::post('/qr-code/validate', [QrCodeController::class, 'validate'])->name('qr-code.validate');
-});
-
-Route::get('/test-email', function() {
-    try {
-        Mail::raw('Test email dari sistem absensi', function($message) {
-            $message->to('marcophilips73@gmail.com')
-                    ->subject('Test Email');
-        });
-        return 'Email berhasil dikirim!';
-    } catch (\Exception $e) {
-        return 'Error: ' . $e->getMessage();
-    }
 });

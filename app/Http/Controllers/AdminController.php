@@ -13,6 +13,7 @@ use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\EmployeesExport;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 
 class AdminController extends Controller
 {
@@ -26,52 +27,146 @@ class AdminController extends Controller
      */
     public function dashboard()
     {
-        $totalEmployees = User::where('role', 'employee')->count();
-        $activeEmployees = User::where('role', 'employee')->where('is_active', true)->count();
+        $employeeBaseQuery = User::query()->employees();
+        $totalEmployees = (clone $employeeBaseQuery)->count();
+        $activeEmployees = (clone $employeeBaseQuery)->active()->count();
+        $inactiveEmployees = max($totalEmployees - $activeEmployees, 0);
         $totalShifts = Shift::count();
-        
-        $today = now()->format('Y-m-d');
-        $todayAttendance = Attendance::where('date', $today)->count();
-        $todayOnTime = Attendance::where('date', $today)->where('status', 'on_time')->count();
-        $todayLate = Attendance::where('date', $today)->where('status', 'late')->count();
-        $todayAbsent = User::where('role', 'employee')->where('is_active', true)->count() - $todayAttendance;
+
+        $today = now()->toDateString();
+        $todayAttendanceQuery = Attendance::query()->whereDate('date', $today);
+        $todayAttendance = (clone $todayAttendanceQuery)->whereNotNull('check_in')->count();
+        $todayOnTime = (clone $todayAttendanceQuery)->where('status', 'on_time')->count();
+        $todayLate = (clone $todayAttendanceQuery)->where('status', 'late')->count();
+        $todayIncomplete = (clone $todayAttendanceQuery)->where('status', 'incomplete')->count();
+        $todayAbsent = max($activeEmployees - $todayAttendance, 0);
+        $attendanceRate = $activeEmployees > 0 ? round(($todayAttendance / $activeEmployees) * 100, 1) : 0;
+
+        $weekDates = collect(range(6, 0))->map(fn ($day) => now()->subDays($day));
+        $weeklyTrend = [
+            'labels' => $weekDates->map(fn ($date) => $date->translatedFormat('d M'))->values(),
+            'on_time' => $weekDates->map(function ($date) {
+                return Attendance::whereDate('date', $date->toDateString())->where('status', 'on_time')->count();
+            })->values(),
+            'late' => $weekDates->map(function ($date) {
+                return Attendance::whereDate('date', $date->toDateString())->where('status', 'late')->count();
+            })->values(),
+            'present' => $weekDates->map(function ($date) {
+                return Attendance::whereDate('date', $date->toDateString())->whereNotNull('check_in')->count();
+            })->values(),
+            'absent' => $weekDates->map(function ($date) use ($activeEmployees) {
+                $present = Attendance::whereDate('date', $date->toDateString())->whereNotNull('check_in')->count();
+                return max($activeEmployees - $present, 0);
+            })->values(),
+        ];
+
+        $departmentBreakdown = User::query()
+            ->employees()
+            ->active()
+            ->selectRaw("COALESCE(NULLIF(department, ''), 'Belum diatur') as department_name, COUNT(*) as total")
+            ->groupBy('department_name')
+            ->orderByDesc('total')
+            ->limit(6)
+            ->get();
+
+        $shiftBreakdown = Shift::query()
+            ->withCount(['users as employee_total' => fn ($query) => $query->employees()->active()])
+            ->orderByDesc('employee_total')
+            ->limit(6)
+            ->get();
 
         // Recent activities
         $recentActivities = ActivityLog::with('user')
             ->orderBy('created_at', 'desc')
-            ->limit(10)
+            ->limit(8)
             ->get();
 
         // Active QR Codes
         $activeQrCodes = QrCode::with('shift')
             ->where('is_active', true)
             ->where('expires_at', '>', now())
+            ->orderBy('expires_at')
+            ->get();
+
+        $recentEmployees = User::query()
+            ->employees()
+            ->with('shift')
+            ->latest()
+            ->limit(6)
             ->get();
 
         return view('admin.dashboard', compact(
             'totalEmployees',
             'activeEmployees',
+            'inactiveEmployees',
             'totalShifts',
             'todayAttendance',
             'todayOnTime',
             'todayLate',
+            'todayIncomplete',
             'todayAbsent',
+            'attendanceRate',
+            'weeklyTrend',
+            'departmentBreakdown',
+            'shiftBreakdown',
             'recentActivities',
-            'activeQrCodes'
+            'activeQrCodes',
+            'recentEmployees'
         ));
     }
 
     /**
      * Employee Management - Index
      */
-    public function employees()
+    public function employees(Request $request)
     {
-        $employees = User::with('shift')
-            ->where('role', 'employee')
-            ->orderBy('created_at', 'desc')
-            ->paginate(15);
+        $perPage = min(max((int) $request->input('per_page', 15), 10), 100);
+        $filters = [
+            'search' => trim((string) $request->input('search')),
+            'status' => $request->input('status'),
+            'shift_id' => $request->input('shift_id'),
+            'department' => trim((string) $request->input('department')),
+        ];
 
-        return view('admin.employees.index', compact('employees'));
+        $query = User::query()
+            ->with('shift')
+            ->employees()
+            ->when($filters['search'], function (Builder $builder, string $search) {
+                $builder->where(function (Builder $nested) use ($search) {
+                    $nested->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('employee_id', 'like', "%{$search}%")
+                        ->orWhere('position', 'like', "%{$search}%");
+                });
+            })
+            ->when($filters['status'] === 'active', fn (Builder $builder) => $builder->where('is_active', true))
+            ->when($filters['status'] === 'inactive', fn (Builder $builder) => $builder->where('is_active', false))
+            ->when($filters['shift_id'], fn (Builder $builder, $shiftId) => $builder->where('shift_id', $shiftId))
+            ->when($filters['department'], fn (Builder $builder, string $department) => $builder->where('department', 'like', "%{$department}%"));
+
+        $employees = (clone $query)
+            ->orderBy('name')
+            ->paginate($perPage)
+            ->withQueryString();
+
+        $employeeStatsQuery = User::query()->employees();
+        $employeeStats = [
+            'total' => (clone $employeeStatsQuery)->count(),
+            'active' => (clone $employeeStatsQuery)->where('is_active', true)->count(),
+            'inactive' => (clone $employeeStatsQuery)->where('is_active', false)->count(),
+            'filtered' => (clone $query)->count(),
+        ];
+
+        $shifts = Shift::query()->active()->orderBy('start_time')->get();
+        $departments = User::query()->employees()
+            ->select('department')
+            ->whereNotNull('department')
+            ->where('department', '!=', '')
+            ->distinct()
+            ->orderBy('department')
+            ->pluck('department');
+
+        return view('admin.employees.index', compact('employees', 'employeeStats', 'shifts', 'departments', 'filters', 'perPage'));
     }
 
     /**
@@ -242,13 +337,20 @@ class AdminController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:100',
             'start_time' => 'required|date_format:H:i',
-            'end_time' => 'required|date_format:H:i|after:start_time',
+            'end_time' => [
+                'required',
+                'date_format:H:i',
+                function ($attribute, $value, $fail) use ($request) {
+                    if ($value === $request->start_time) {
+                        $fail('Waktu selesai tidak boleh sama dengan waktu mulai.');
+                    }
+                },
+            ],
             'late_tolerance' => 'required|integer|min:0|max:60',
         ], [
             'name.required' => 'Nama shift wajib diisi',
             'start_time.required' => 'Waktu mulai wajib diisi',
             'end_time.required' => 'Waktu selesai wajib diisi',
-            'end_time.after' => 'Waktu selesai harus setelah waktu mulai',
             'late_tolerance.required' => 'Toleransi keterlambatan wajib diisi',
         ]);
 
@@ -270,7 +372,15 @@ class AdminController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:100',
             'start_time' => 'required|date_format:H:i',
-            'end_time' => 'required|date_format:H:i|after:start_time',
+            'end_time' => [
+                'required',
+                'date_format:H:i',
+                function ($attribute, $value, $fail) use ($request) {
+                    if ($value === $request->start_time) {
+                        $fail('Waktu selesai tidak boleh sama dengan waktu mulai.');
+                    }
+                },
+            ],
             'late_tolerance' => 'required|integer|min:0|max:60',
             'is_active' => 'required|boolean',
         ]);
@@ -309,29 +419,48 @@ class AdminController extends Controller
      */
     public function attendances(Request $request)
     {
-        $query = Attendance::with(['user', 'shift']);
-
-        if ($request->filled('date')) {
-            $query->where('date', $request->date);
-        } else {
-            $query->where('date', now()->format('Y-m-d'));
+        $perPage = min(max((int) $request->input('per_page', 20), 10), 100);
+        $startDate = $request->input('start_date') ?: $request->input('date');
+        $endDate = $request->input('end_date') ?: $request->input('date');
+        if (!$startDate && !$endDate) {
+            $startDate = now()->toDateString();
+            $endDate = now()->toDateString();
         }
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
+        $query = Attendance::with(['user', 'shift', 'creator'])
+            ->when($startDate, fn (Builder $builder) => $builder->whereDate('date', '>=', $startDate))
+            ->when($endDate, fn (Builder $builder) => $builder->whereDate('date', '<=', $endDate))
+            ->when($request->filled('status'), fn (Builder $builder) => $builder->where('status', $request->status))
+            ->when($request->filled('user_id'), fn (Builder $builder) => $builder->where('user_id', $request->user_id))
+            ->when($request->filled('shift_id'), fn (Builder $builder) => $builder->where('shift_id', $request->shift_id))
+            ->when($request->filled('search'), function (Builder $builder) use ($request) {
+                $search = trim((string) $request->input('search'));
+                $builder->whereHas('user', function (Builder $userQuery) use ($search) {
+                    $userQuery->where('name', 'like', "%{$search}%")
+                        ->orWhere('employee_id', 'like', "%{$search}%")
+                        ->orWhere('department', 'like', "%{$search}%");
+                });
+            });
 
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->user_id);
-        }
+        $attendanceStatsQuery = clone $query;
+        $attendanceStats = [
+            'total' => (clone $attendanceStatsQuery)->count(),
+            'on_time' => (clone $attendanceStatsQuery)->where('status', 'on_time')->count(),
+            'late' => (clone $attendanceStatsQuery)->where('status', 'late')->count(),
+            'incomplete' => (clone $attendanceStatsQuery)->where('status', 'incomplete')->count(),
+            'absent' => (clone $attendanceStatsQuery)->where('status', 'absent')->count(),
+            'hours' => round((float) (clone $attendanceStatsQuery)->sum('total_hours'), 2),
+        ];
 
         $attendances = $query->orderBy('date', 'desc')
             ->orderBy('check_in', 'desc')
-            ->paginate(20);
+            ->paginate($perPage)
+            ->withQueryString();
 
-        $employees = User::where('role', 'employee')->orderBy('name')->get();
+        $employees = User::query()->employees()->orderBy('name')->get(['id', 'name', 'employee_id']);
+        $shifts = Shift::query()->active()->orderBy('start_time')->get();
 
-        return view('admin.attendances.index', compact('attendances', 'employees'));
+        return view('admin.attendances.index', compact('attendances', 'employees', 'attendanceStats', 'perPage', 'startDate', 'endDate', 'shifts'));
     }
 
     /**
@@ -362,9 +491,12 @@ class AdminController extends Controller
         ];
 
         if ($validated['check_in'] && $validated['check_out']) {
-            $checkIn = Carbon::parse($validated['check_in']);
-            $checkOut = Carbon::parse($validated['check_out']);
-            $data['total_hours'] = $checkOut->diffInMinutes($checkIn) / 60;
+            $checkIn = Carbon::parse($validated['date'] . ' ' . $validated['check_in']);
+            $checkOut = Carbon::parse($validated['date'] . ' ' . $validated['check_out']);
+            if ($checkOut->lte($checkIn)) {
+                $checkOut->addDay();
+            }
+            $data['total_hours'] = round($checkOut->diffInMinutes($checkIn) / 60, 2);
         }
 
         Attendance::updateOrCreate(
@@ -400,9 +532,12 @@ class AdminController extends Controller
         ];
 
         if ($validated['check_in'] && $validated['check_out']) {
-            $checkIn = Carbon::parse($validated['check_in']);
-            $checkOut = Carbon::parse($validated['check_out']);
-            $data['total_hours'] = $checkOut->diffInMinutes($checkIn) / 60;
+            $checkIn = Carbon::parse($attendance->date->format('Y-m-d') . ' ' . $validated['check_in']);
+            $checkOut = Carbon::parse($attendance->date->format('Y-m-d') . ' ' . $validated['check_out']);
+            if ($checkOut->lte($checkIn)) {
+                $checkOut->addDay();
+            }
+            $data['total_hours'] = round($checkOut->diffInMinutes($checkIn) / 60, 2);
         }
 
         $attendance->update($data);

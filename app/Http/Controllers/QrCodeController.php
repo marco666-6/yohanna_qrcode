@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\QrCode;
 use App\Models\Shift;
+use App\Services\QrCodeService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Carbon\Carbon;
 
 class QrCodeController extends Controller
@@ -13,71 +13,48 @@ class QrCodeController extends Controller
     /**
      * Generate new QR code for check-in or check-out
      */
-    public function generate(Request $request)
+    public function generate(Request $request, QrCodeService $qrCodeService)
     {
         $type = $request->input('type', 'check_in'); // check_in or check_out
         $shiftId = $request->input('shift_id');
+        $shift = Shift::findOrFail($shiftId);
 
-        // Deactivate old QR codes
-        QrCode::where('type', $type)
-            ->where('shift_id', $shiftId)
-            ->update(['is_active' => false]);
+        $window = getAttendanceWindow($shift, $type);
+        if (!$window['is_open']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'QR hanya bisa digenerate saat window absensi untuk shift ini sedang terbuka.',
+                'window' => [
+                    'start' => $window['start']->toISOString(),
+                    'end' => $window['end']->toISOString(),
+                ],
+            ], 422);
+        }
 
-        // Generate new QR code
-        $qrCode = QrCode::create([
-            'code' => $this->generateUniqueCode(),
-            'type' => $type,
-            'shift_id' => $shiftId,
-            'generated_at' => now(),
-            'expires_at' => now()->addSeconds(config('app.qr_code_expiry_seconds', 30)),
-            'is_active' => true,
-        ]);
+        $qrCode = $qrCodeService->regenerateForShift($shift, $type);
 
         return response()->json([
             'success' => true,
             'qr_code' => $qrCode,
             'code' => $qrCode->code,
             'expires_at' => $qrCode->expires_at->toISOString(),
+            'window' => [
+                'start' => $window['start']->toISOString(),
+                'end' => $window['end']->toISOString(),
+            ],
         ]);
     }
 
     /**
      * Auto-generate QR codes for all active shifts
      */
-    public function autoGenerate()
+    public function autoGenerate(QrCodeService $qrCodeService)
     {
-        $shifts = Shift::active()->get();
-        $currentTime = now();
-        $generatedCodes = [];
-
-        foreach ($shifts as $shift) {
-            $shiftStart = Carbon::parse($shift->start_time);
-            $shiftEnd = Carbon::parse($shift->end_time);
-
-            // Check if within check-in window (30 min before to 45 min after)
-            $checkInStart = $shiftStart->copy()->subMinutes(30);
-            $checkInEnd = $shiftStart->copy()->addMinutes(45);
-
-            // Check if within check-out window (30 min before to 45 min after)
-            $checkOutStart = $shiftEnd->copy()->subMinutes(30);
-            $checkOutEnd = $shiftEnd->copy()->addMinutes(45);
-
-            // Generate check-in QR
-            if ($currentTime->between($checkInStart, $checkInEnd)) {
-                $qrCode = $this->generateForShift($shift, 'check_in');
-                $generatedCodes[] = $qrCode;
-            }
-
-            // Generate check-out QR
-            if ($currentTime->between($checkOutStart, $checkOutEnd)) {
-                $qrCode = $this->generateForShift($shift, 'check_out');
-                $generatedCodes[] = $qrCode;
-            }
-        }
+        $generatedCodes = $qrCodeService->ensureCurrentWindowQRCodes();
 
         return response()->json([
             'success' => true,
-            'generated_count' => count($generatedCodes),
+            'generated_count' => $generatedCodes->count(),
             'codes' => $generatedCodes,
         ]);
     }
@@ -89,7 +66,9 @@ class QrCodeController extends Controller
     {
         $qrCodes = QrCode::with('shift')
             ->active()
-            ->get();
+            ->get()
+            ->filter(fn ($qrCode) => $qrCode->isWithinWindow())
+            ->values();
 
         return response()->json([
             'success' => true,
@@ -126,39 +105,6 @@ class QrCodeController extends Controller
             'valid' => true,
             'qr_code' => $qrCode,
             'message' => 'QR Code valid',
-        ]);
-    }
-
-    /**
-     * Helper: Generate unique code
-     */
-    private function generateUniqueCode()
-    {
-        do {
-            $code = Str::random(32);
-        } while (QrCode::where('code', $code)->exists());
-
-        return $code;
-    }
-
-    /**
-     * Helper: Generate QR for specific shift
-     */
-    private function generateForShift(Shift $shift, $type)
-    {
-        // Deactivate old codes
-        QrCode::where('shift_id', $shift->id)
-            ->where('type', $type)
-            ->update(['is_active' => false]);
-
-        // Create new code
-        return QrCode::create([
-            'code' => $this->generateUniqueCode(),
-            'type' => $type,
-            'shift_id' => $shift->id,
-            'generated_at' => now(),
-            'expires_at' => now()->addSeconds(config('app.qr_code_expiry_seconds', 30)),
-            'is_active' => true,
         ]);
     }
 

@@ -56,10 +56,15 @@ class Attendance extends Model
 
     public function calculateTotalHours()
     {
-        if ($this->check_in && $this->check_out) {
-            $checkIn = Carbon::parse($this->check_in);
-            $checkOut = Carbon::parse($this->check_out);
-            return $checkOut->diffInMinutes($checkIn) / 60;
+        if ($this->check_in && $this->check_out && $this->date) {
+            $checkIn = Carbon::parse($this->date->format('Y-m-d') . ' ' . $this->check_in);
+            $checkOut = Carbon::parse($this->date->format('Y-m-d') . ' ' . $this->check_out);
+
+            if ($checkOut->lte($checkIn)) {
+                $checkOut->addDay();
+            }
+
+            return round($checkOut->diffInMinutes($checkIn) / 60, 2);
         }
         return 0;
     }
@@ -71,8 +76,8 @@ class Attendance extends Model
         } elseif (!$this->check_out) {
             $this->status = 'incomplete';
         } else {
-            $checkInTime = Carbon::parse($this->check_in);
-            $shiftStart = Carbon::parse($this->shift->start_time);
+            $checkInTime = Carbon::parse($this->date->format('Y-m-d') . ' ' . $this->check_in);
+            $shiftStart = Carbon::parse($this->date->format('Y-m-d') . ' ' . $this->shift->start_time);
             $tolerance = $this->shift->late_tolerance;
 
             if ($checkInTime->lte($shiftStart->addMinutes($tolerance))) {
@@ -102,5 +107,15 @@ class Attendance extends Model
     public function scopeDateRange($query, $startDate, $endDate)
     {
         return $query->whereBetween('date', [$startDate, $endDate]);
+    }
+
+    public function scopeOpenForCheckout($query, $userId, $shiftId = null)
+    {
+        return $query->where('user_id', $userId)
+            ->when($shiftId, fn ($builder) => $builder->where('shift_id', $shiftId))
+            ->whereNotNull('check_in')
+            ->whereNull('check_out')
+            ->whereIn('date', [now()->toDateString(), now()->subDay()->toDateString()])
+            ->orderByDesc('date');
     }
 }

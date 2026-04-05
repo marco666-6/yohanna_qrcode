@@ -1,335 +1,241 @@
 @extends('layouts.app')
 
 @section('title', 'Dashboard HRD')
-
-@section('sidebar')
-    <li class="nav-item">
-        <a class="nav-link active" href="{{ route('hrd.dashboard') }}">
-            <i class="bi bi-speedometer2"></i> Dashboard
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="{{ route('hrd.attendance-report') }}">
-            <i class="bi bi-file-earmark-text"></i> Laporan Kehadiran
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="{{ route('hrd.leave-requests') }}">
-            <i class="bi bi-calendar-event"></i> Pengajuan Cuti
-            @if($pendingLeaves > 0)
-                <span class="badge bg-danger ms-2">{{ $pendingLeaves }}</span>
-            @endif
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="{{ route('hrd.statistics') }}">
-            <i class="bi bi-graph-up"></i> Statistik
-        </a>
-    </li>
-@endsection
+@section('page-kicker', 'HR Insight')
+@section('page-title', 'Dashboard HRD')
+@section('page-subtitle', 'Analisis kedisiplinan, antrian cuti, dan koreksi operasional untuk membantu evaluasi SDM.')
 
 @section('content')
-<div class="row">
-    <div class="col-12">
-        <h2 class="page-title">
-            <i class="bi bi-speedometer2 me-2"></i>
-            Dashboard HRD
-        </h2>
-        <p class="text-muted">Selamat datang, <strong>{{ auth()->user()->name }}</strong>! - {{ formatDate(now()) }}</p>
+<div class="d-grid gap-4">
+    <div class="hero-panel">
+        <div class="row g-4 align-items-center position-relative">
+            <div class="col-xl-8">
+                <div class="small text-uppercase fw-bold muted" style="letter-spacing:.2em;">Human Resource Overview</div>
+                <h2 class="mt-2 mb-2 fw-bold">Fokus HRD hari ini: {{ $pendingLeaves > 0 ? 'review cuti yang masih menunggu' : 'pantau stabilitas kehadiran dan koreksi seperlunya' }}</h2>
+                <p class="muted mb-4">Panel ini menampilkan statistik yang masuk akal untuk aplikasi absensi: hadir, terlambat, belum check-out, serta insight per departemen dan karyawan yang paling sering terlambat.</p>
+                <div class="d-flex flex-wrap gap-2">
+                    <span class="badge rounded-pill text-bg-light px-3 py-2">{{ $totalEmployees }} karyawan aktif</span>
+                    <span class="badge rounded-pill text-bg-light px-3 py-2">{{ $todayPresent }} hadir hari ini</span>
+                    <span class="badge rounded-pill text-bg-light px-3 py-2">{{ $pendingLeaves }} cuti pending</span>
+                </div>
+            </div>
+            <div class="col-xl-4">
+                <div class="bg-white bg-opacity-10 rounded-4 p-4 border border-white border-opacity-10">
+                    <div class="small muted">Kondisi Hari Ini</div>
+                    <div class="display-6 fw-bold">{{ attendancePercentage($todayPresent, $totalEmployees) }}%</div>
+                    <div class="muted">Rasio kehadiran terhadap karyawan aktif.</div>
+                </div>
+            </div>
+        </div>
     </div>
-</div>
 
-<!-- Statistics Cards -->
-<div class="row g-3 mb-4">
-    <div class="col-md-3">
-        <div class="card stat-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
+    <div class="row g-3">
+        @foreach([
+            ['label' => 'Hadir Hari Ini', 'value' => $todayPresent, 'helper' => attendancePercentage($todayPresent, $totalEmployees) . '% tingkat hadir', 'icon' => 'bi-calendar-check', 'tone' => 'success'],
+            ['label' => 'Tidak Hadir', 'value' => $todayAbsent, 'helper' => 'Belum check-in sampai saat ini', 'icon' => 'bi-person-x', 'tone' => 'danger'],
+            ['label' => 'Terlambat', 'value' => $todayLate, 'helper' => $todayIncomplete . ' belum check-out', 'icon' => 'bi-alarm', 'tone' => 'warning'],
+            ['label' => 'Cuti Pending', 'value' => $pendingLeaves, 'helper' => 'Perlu review HRD', 'icon' => 'bi-calendar2-week', 'tone' => 'info'],
+        ] as $item)
+            <div class="col-6 col-xl-3">
+                <div class="stat-card {{ $item['tone'] }}">
+                    <div class="stat-icon"><i class="bi {{ $item['icon'] }}"></i></div>
+                    <div class="stat-value">{{ $item['value'] }}</div>
+                    <div class="stat-label">{{ $item['label'] }}</div>
+                    <div class="stat-helper">{{ $item['helper'] }}</div>
+                </div>
+            </div>
+        @endforeach
+    </div>
+
+    <div class="row g-4">
+        <div class="col-xl-8">
+            <div class="card h-100">
+                <div class="card-header d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
                     <div>
-                        <p class="text-muted mb-1">Total Karyawan</p>
-                        <h3 class="mb-0">{{ $totalEmployees }}</h3>
-                        <small class="text-primary">Karyawan Aktif</small>
+                        <div class="page-kicker">Analytics</div>
+                        <div class="fw-bold fs-5">Statistik HRD yang dapat dikonfigurasi</div>
                     </div>
-                    <i class="bi bi-people text-primary" style="font-size: 2.5rem;"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card stat-card success">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1">Hadir Hari Ini</p>
-                        <h3 class="mb-0">{{ $todayPresent }}</h3>
-                        <small class="text-success">
-                            @if($totalEmployees > 0)
-                                {{ number_format(($todayPresent / $totalEmployees) * 100, 1) }}%
-                            @else
-                                0%
-                            @endif
-                        </small>
-                    </div>
-                    <i class="bi bi-check-circle text-success" style="font-size: 2.5rem;"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card stat-card danger">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1">Tidak Hadir</p>
-                        <h3 class="mb-0">{{ $todayAbsent }}</h3>
-                        <small class="text-danger">Hari Ini</small>
-                    </div>
-                    <i class="bi bi-x-circle text-danger" style="font-size: 2.5rem;"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card stat-card warning">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1">Terlambat</p>
-                        <h3 class="mb-0">{{ $todayLate }}</h3>
-                        <small class="text-warning">Hari Ini</small>
-                    </div>
-                    <i class="bi bi-clock-history text-warning" style="font-size: 2.5rem;"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Pending Leave Requests Alert -->
-@if($pendingLeaves > 0)
-<div class="alert alert-warning alert-dismissible fade show" role="alert">
-    <i class="bi bi-exclamation-triangle me-2"></i>
-    <strong>Perhatian!</strong> Ada <strong>{{ $pendingLeaves }}</strong> pengajuan cuti yang menunggu persetujuan Anda.
-    <a href="{{ route('hrd.leave-requests') }}" class="alert-link">Lihat sekarang</a>
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
-@endif
-
-<div class="row g-3 mb-4">
-    <!-- Attendance Chart -->
-    <div class="col-lg-8">
-        <div class="card">
-            <div class="card-header bg-white">
-                <h5 class="mb-0">
-                    <i class="bi bi-bar-chart me-2"></i>
-                    Grafik Kehadiran (7 Hari Terakhir)
-                </h5>
-            </div>
-            <div class="card-body">
-                <div id="attendanceChart" style="height: 300px;"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Monthly Statistics -->
-    <div class="col-lg-4">
-        <div class="card">
-            <div class="card-header bg-primary text-white">
-                <h6 class="mb-0">
-                    <i class="bi bi-calendar-month me-2"></i>
-                    Statistik Bulan Ini
-                </h6>
-            </div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted">Total Kehadiran</span>
-                        <strong>{{ $monthlyStats['total_attendance'] }}</strong>
-                    </div>
-                    <div class="progress" style="height: 10px;">
-                        <div class="progress-bar bg-primary" style="width: 100%"></div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <select class="form-select" id="hrdChartType" style="min-width:120px;">
+                            <option value="bar">Bar</option>
+                            <option value="line">Line</option>
+                            <option value="doughnut">Doughnut</option>
+                        </select>
+                        <select class="form-select" id="hrdChartDataset" style="min-width:210px;">
+                            <option value="weekly">Kehadiran 7 Hari</option>
+                            <option value="department">Sebaran Departemen</option>
+                            <option value="monthly">Ringkasan Bulan Ini</option>
+                        </select>
                     </div>
                 </div>
-
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted">Tepat Waktu</span>
-                        <strong>{{ $monthlyStats['on_time'] }}</strong>
-                    </div>
-                    <div class="progress" style="height: 10px;">
-                        @php
-                            $onTimePercentage = $monthlyStats['total_attendance'] > 0 
-                                ? ($monthlyStats['on_time'] / $monthlyStats['total_attendance']) * 100 
-                                : 0;
-                        @endphp
-                        <div class="progress-bar bg-success" style="width: {{ $onTimePercentage }}%"></div>
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted">Terlambat</span>
-                        <strong>{{ $monthlyStats['late'] }}</strong>
-                    </div>
-                    <div class="progress" style="height: 10px;">
-                        @php
-                            $latePercentage = $monthlyStats['total_attendance'] > 0 
-                                ? ($monthlyStats['late'] / $monthlyStats['total_attendance']) * 100 
-                                : 0;
-                        @endphp
-                        <div class="progress-bar bg-warning" style="width: {{ $latePercentage }}%"></div>
-                    </div>
-                </div>
-
-                <div>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted">Belum Check-out</span>
-                        <strong>{{ $monthlyStats['incomplete'] }}</strong>
-                    </div>
-                    <div class="progress" style="height: 10px;">
-                        @php
-                            $incompletePercentage = $monthlyStats['total_attendance'] > 0 
-                                ? ($monthlyStats['incomplete'] / $monthlyStats['total_attendance']) * 100 
-                                : 0;
-                        @endphp
-                        <div class="progress-bar bg-info" style="width: {{ $incompletePercentage }}%"></div>
+                <div class="card-body">
+                    <div class="chart-shell">
+                        <canvas id="hrdDashboardChart"></canvas>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="card mt-3">
-            <div class="card-header bg-success text-white">
-                <h6 class="mb-0">
-                    <i class="bi bi-lightning me-2"></i>
-                    Aksi Cepat
-                </h6>
-            </div>
-            <div class="card-body">
-                <div class="d-grid gap-2">
-                    <a href="{{ route('hrd.attendance-report') }}" class="btn btn-primary">
-                        <i class="bi bi-file-earmark-text me-2"></i>
-                        Lihat Laporan
-                    </a>
-                    <a href="{{ route('hrd.leave-requests') }}" class="btn btn-warning">
-                        <i class="bi bi-calendar-event me-2"></i>
-                        Kelola Cuti
-                        @if($pendingLeaves > 0)
-                            <span class="badge bg-danger ms-2">{{ $pendingLeaves }}</span>
-                        @endif
-                    </a>
-                    <a href="{{ route('hrd.statistics') }}" class="btn btn-info">
-                        <i class="bi bi-graph-up me-2"></i>
-                        Lihat Statistik
-                    </a>
+        <div class="col-xl-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <div class="page-kicker">Quick Access</div>
+                    <div class="fw-bold fs-5">Prioritas HRD</div>
+                </div>
+                <div class="card-body d-flex flex-column gap-3">
+                    @foreach([
+                        ['label' => 'Laporan Kehadiran', 'route' => route('hrd.attendance-report'), 'icon' => 'bi-file-earmark-bar-graph', 'tone' => 'primary'],
+                        ['label' => 'Review Cuti', 'route' => route('hrd.leave-requests'), 'icon' => 'bi-calendar2-week', 'tone' => 'warning'],
+                        ['label' => 'Statistik Lanjutan', 'route' => route('hrd.statistics'), 'icon' => 'bi-graph-up-arrow', 'tone' => 'success'],
+                    ] as $action)
+                        <a href="{{ $action['route'] }}" class="quick-link">
+                            <span class="quick-link-icon bg-{{ $action['tone'] }} bg-opacity-10 text-{{ $action['tone'] }}">
+                                <i class="bi {{ $action['icon'] }}"></i>
+                            </span>
+                            <div>
+                                <div class="fw-semibold">{{ $action['label'] }}</div>
+                                <div class="small text-muted">Masuk ke modul evaluasi tanpa pindah alur manual.</div>
+                            </div>
+                            <i class="bi bi-chevron-right ms-auto text-muted"></i>
+                        </a>
+                    @endforeach
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Recent Activities -->
-<div class="card">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">
-            <i class="bi bi-clock-history me-2"></i>
-            Aktivitas Terkini
-        </h5>
-    </div>
-    <div class="card-body">
-        @if($recentActivities->count() > 0)
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Waktu</th>
-                            <th>User</th>
-                            <th>Aktivitas</th>
-                            <th>Deskripsi</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($recentActivities as $activity)
-                        <tr>
-                            <td>
-                                <small class="text-muted">
-                                    {{ $activity->created_at->diffForHumans() }}
-                                </small>
-                            </td>
-                            <td>
-                                @if($activity->user)
-                                    <strong>{{ $activity->user->name }}</strong>
-                                    <br>
-                                    <small class="text-muted">{{ $activity->user->employee_id }}</small>
-                                @else
-                                    <span class="text-muted">-</span>
-                                @endif
-                            </td>
-                            <td>
-                                <span class="badge bg-secondary">{{ $activity->action }}</span>
-                            </td>
-                            <td>
-                                <small>{{ $activity->description ?? '-' }}</small>
-                            </td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                </table>
+    <div class="row g-4">
+        <div class="col-xl-5">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="fw-bold fs-5">Antrian cuti menunggu</div>
+                    <a href="{{ route('hrd.leave-requests', ['status' => 'pending']) }}" class="btn btn-outline-primary btn-sm">Lihat Semua</a>
+                </div>
+                <div class="card-body">
+                    @forelse($pendingLeaveItems as $leave)
+                        <div class="data-summary-item mb-3">
+                            <div class="d-flex justify-content-between gap-3">
+                                <div>
+                                    <div class="fw-semibold">{{ $leave->user->name }}</div>
+                                    <div class="small text-muted">{{ getLeaveTypeText($leave->leave_type) }}</div>
+                                </div>
+                                <span class="badge rounded-pill badge-soft-warning">{{ $leave->total_days }} hari</span>
+                            </div>
+                            <div class="small text-muted mt-2">{{ formatDate($leave->start_date) }} - {{ formatDate($leave->end_date) }}</div>
+                        </div>
+                    @empty
+                        <div class="small text-muted">Tidak ada pengajuan cuti yang menunggu persetujuan saat ini.</div>
+                    @endforelse
+                </div>
             </div>
-        @else
-            <div class="text-center py-4">
-                <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
-                <p class="text-muted mt-2">Belum ada aktivitas terkini</p>
+        </div>
+
+        <div class="col-xl-7">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="fw-bold fs-5">Karyawan paling sering terlambat bulan ini</div>
+                    <span class="soft-chip"><i class="bi bi-alarm"></i>Perlu coaching</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4">Karyawan</th>
+                                    <th>Departemen</th>
+                                    <th>Keterlambatan</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse($lateLeaders as $employee)
+                                    <tr>
+                                        <td class="ps-4">
+                                            <div class="fw-semibold">{{ $employee->name }}</div>
+                                            <div class="small text-muted">{{ $employee->employee_id }}</div>
+                                        </td>
+                                        <td>{{ $employee->department ?: 'Belum diatur' }}</td>
+                                        <td><span class="badge rounded-pill badge-soft-warning">{{ $employee->late_count }} kali</span></td>
+                                        <td>
+                                            <span class="badge rounded-pill {{ $employee->is_active ? 'badge-soft-success' : 'badge-soft-danger' }}">
+                                                {{ $employee->is_active ? 'Aktif' : 'Nonaktif' }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="4" class="text-center py-4 text-muted">Belum ada data keterlambatan.</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
-        @endif
+        </div>
     </div>
 </div>
 @endsection
 
 @push('scripts')
 <script>
-    // Attendance Chart
-    Highcharts.chart('attendanceChart', {
-        chart: {
-            type: 'column'
-        },
-        title: {
-            text: null
-        },
-        xAxis: {
-            categories: @json($chartData['dates'])
-        },
-        yAxis: {
-            min: 0,
-            title: {
-                text: 'Jumlah Karyawan'
+    document.addEventListener('DOMContentLoaded', function () {
+        const chartCanvas = document.getElementById('hrdDashboardChart');
+        const typeSelect = document.getElementById('hrdChartType');
+        const datasetSelect = document.getElementById('hrdChartDataset');
+        let chart;
+
+        const datasets = {
+            weekly: {
+                labels: @json($chartData['dates']),
+                datasets: [
+                    { label: 'Tepat Waktu', data: @json($chartData['onTime']), borderColor: '#4f8a66', backgroundColor: 'rgba(79,138,102,.22)' },
+                    { label: 'Terlambat', data: @json($chartData['late']), borderColor: '#c88a4d', backgroundColor: 'rgba(200,138,77,.22)' },
+                    { label: 'Tidak Hadir', data: @json($chartData['absent']), borderColor: '#ba5d57', backgroundColor: 'rgba(186,93,87,.2)' }
+                ]
+            },
+            department: {
+                labels: @json($departmentStats->pluck('department_name')),
+                datasets: [
+                    { label: 'Karyawan', data: @json($departmentStats->pluck('total')), borderColor: '#c97570', backgroundColor: ['#c97570','#df9a95','#8b5557','#f0c6c3','#ba5d57','#e5b5aa'] }
+                ]
+            },
+            monthly: {
+                labels: ['Tepat Waktu', 'Terlambat', 'Belum Check-out'],
+                datasets: [
+                    { label: 'Bulan Ini', data: [{{ $monthlyStats['on_time'] }}, {{ $monthlyStats['late'] }}, {{ $monthlyStats['incomplete'] }}], borderColor: '#8a7fc5', backgroundColor: ['#4f8a66','#c88a4d','#8a7fc5'] }
+                ]
             }
-        },
-        legend: {
-            align: 'center',
-            verticalAlign: 'bottom'
-        },
-        plotOptions: {
-            column: {
-                stacking: 'normal'
-            }
-        },
-        series: [{
-            name: 'Tepat Waktu',
-            data: @json($chartData['onTime']),
-            color: '#198754'
-        }, {
-            name: 'Terlambat',
-            data: @json($chartData['late']),
-            color: '#ffc107'
-        }, {
-            name: 'Tidak Hadir',
-            data: @json($chartData['absent']),
-            color: '#dc3545'
-        }],
-        credits: {
-            enabled: false
+        };
+
+        function renderChart() {
+            const selected = datasets[datasetSelect.value];
+            const type = typeSelect.value;
+            if (chart) chart.destroy();
+            chart = new Chart(chartCanvas, {
+                type,
+                data: {
+                    labels: selected.labels,
+                    datasets: selected.datasets.map(dataset => ({
+                        ...dataset,
+                        fill: type === 'line',
+                        tension: .35,
+                        borderWidth: 2,
+                        pointBackgroundColor: dataset.borderColor
+                    }))
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } },
+                    scales: type === 'doughnut' ? {} : {
+                        y: { beginAtZero: true, ticks: { precision: 0 } }
+                    }
+                }
+            });
         }
+
+        typeSelect.addEventListener('change', renderChart);
+        datasetSelect.addEventListener('change', renderChart);
+        renderChart();
     });
 </script>
 @endpush

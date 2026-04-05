@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use App\Models\ActivityLog;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 
 class EmployeeController extends Controller
 {
@@ -23,7 +24,7 @@ class EmployeeController extends Controller
     public function dashboard()
     {
         $user = auth()->user();
-        $today = now()->format('Y-m-d');
+        $today = now()->toDateString();
         
         // Today's attendance
         $todayAttendance = Attendance::where('user_id', $user->id)
@@ -31,26 +32,25 @@ class EmployeeController extends Controller
             ->with('shift')
             ->first();
 
+        if (!$todayAttendance) {
+            $todayAttendance = Attendance::openForCheckout($user->id)
+                ->with('shift')
+                ->first();
+        }
+
         // Monthly statistics
-        $monthStart = now()->startOfMonth()->format('Y-m-d');
-        $monthEnd = now()->endOfMonth()->format('Y-m-d');
+        $monthStart = now()->startOfMonth()->toDateString();
+        $monthEnd = now()->endOfMonth()->toDateString();
+        $monthlyQuery = Attendance::query()
+            ->where('user_id', $user->id)
+            ->whereBetween('date', [$monthStart, $monthEnd]);
         
         $monthlyStats = [
-            'total_days' => Attendance::where('user_id', $user->id)
-                ->whereBetween('date', [$monthStart, $monthEnd])
-                ->count(),
-            'on_time' => Attendance::where('user_id', $user->id)
-                ->whereBetween('date', [$monthStart, $monthEnd])
-                ->where('status', 'on_time')
-                ->count(),
-            'late' => Attendance::where('user_id', $user->id)
-                ->whereBetween('date', [$monthStart, $monthEnd])
-                ->where('status', 'late')
-                ->count(),
-            'incomplete' => Attendance::where('user_id', $user->id)
-                ->whereBetween('date', [$monthStart, $monthEnd])
-                ->where('status', 'incomplete')
-                ->count(),
+            'total_days' => (clone $monthlyQuery)->count(),
+            'on_time' => (clone $monthlyQuery)->where('status', 'on_time')->count(),
+            'late' => (clone $monthlyQuery)->where('status', 'late')->count(),
+            'incomplete' => (clone $monthlyQuery)->where('status', 'incomplete')->count(),
+            'hours' => round((float) (clone $monthlyQuery)->sum('total_hours'), 2),
         ];
 
         // Recent attendances
@@ -70,12 +70,46 @@ class EmployeeController extends Controller
             ->where('is_read', false)
             ->count();
 
+        $recentNotifications = Notification::where('user_id', $user->id)
+            ->orderByDesc('created_at')
+            ->limit(4)
+            ->get();
+
+        $upcomingLeaves = LeaveRequest::where('user_id', $user->id)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '>=', now()->toDateString())
+            ->orderBy('start_date')
+            ->limit(3)
+            ->get();
+
+        $attendanceTrend = Attendance::query()
+            ->where('user_id', $user->id)
+            ->whereBetween('date', [now()->copy()->subDays(13)->toDateString(), now()->toDateString()])
+            ->orderBy('date')
+            ->get()
+            ->groupBy(fn ($attendance) => $attendance->date->format('Y-m-d'));
+
+        $trendLabels = collect(range(13, 0))->map(fn ($day) => now()->subDays($day)->translatedFormat('d M'));
+        $trendPresent = collect(range(13, 0))->map(function ($day) use ($attendanceTrend) {
+            $key = now()->subDays($day)->format('Y-m-d');
+            return optional($attendanceTrend->get($key)?->first())->check_in ? 1 : 0;
+        });
+        $trendHours = collect(range(13, 0))->map(function ($day) use ($attendanceTrend) {
+            $key = now()->subDays($day)->format('Y-m-d');
+            return round((float) optional($attendanceTrend->get($key)?->first())->total_hours, 2);
+        });
+
         return view('employee.dashboard', compact(
             'todayAttendance',
             'monthlyStats',
             'recentAttendances',
             'pendingLeaves',
-            'unreadNotifications'
+            'unreadNotifications',
+            'recentNotifications',
+            'upcomingLeaves',
+            'trendLabels',
+            'trendPresent',
+            'trendHours'
         ));
     }
 
@@ -93,55 +127,51 @@ class EmployeeController extends Controller
     public function attendanceHistory(Request $request)
     {
         $user = auth()->user();
-        $query = Attendance::where('user_id', $user->id)->with('shift');
+        $perPage = min(max((int) $request->input('per_page', 15), 10), 100);
+        $selectedMonth = (int) ($request->input('month') ?: now()->month);
+        $selectedYear = (int) ($request->input('year') ?: now()->year);
+        $query = Attendance::where('user_id', $user->id)
+            ->with('shift')
+            ->whereYear('date', $selectedYear)
+            ->whereMonth('date', $selectedMonth)
+            ->when($request->filled('status'), fn (Builder $builder) => $builder->where('status', $request->status));
 
-        // Filter by month and year
-        if ($request->filled('month') && $request->filled('year')) {
-            $query->whereYear('date', $request->year)
-                  ->whereMonth('date', $request->month);
-        } else {
-            // Default to current month
-            $query->whereYear('date', now()->year)
-                  ->whereMonth('date', now()->month);
-        }
-
-        $attendances = $query->orderBy('date', 'desc')->paginate(20);
+        $statsQuery = clone $query;
+        $attendances = $query->orderBy('date', 'desc')->paginate($perPage)->withQueryString();
 
         // Statistics for the selected period
         $stats = [
             'total' => $attendances->total(),
-            'on_time' => Attendance::where('user_id', $user->id)
-                ->whereYear('date', $request->year ?? now()->year)
-                ->whereMonth('date', $request->month ?? now()->month)
-                ->where('status', 'on_time')
-                ->count(),
-            'late' => Attendance::where('user_id', $user->id)
-                ->whereYear('date', $request->year ?? now()->year)
-                ->whereMonth('date', $request->month ?? now()->month)
-                ->where('status', 'late')
-                ->count(),
-            'incomplete' => Attendance::where('user_id', $user->id)
-                ->whereYear('date', $request->year ?? now()->year)
-                ->whereMonth('date', $request->month ?? now()->month)
-                ->where('status', 'incomplete')
-                ->count(),
+            'on_time' => (clone $statsQuery)->where('status', 'on_time')->count(),
+            'late' => (clone $statsQuery)->where('status', 'late')->count(),
+            'incomplete' => (clone $statsQuery)->where('status', 'incomplete')->count(),
+            'hours' => round((float) (clone $statsQuery)->sum('total_hours'), 2),
         ];
 
-        return view('employee.attendance-history', compact('attendances', 'stats'));
+        return view('employee.attendance-history', compact('attendances', 'stats', 'selectedMonth', 'selectedYear', 'perPage'));
     }
 
     /**
      * Leave Requests - Index
      */
-    public function leaveRequests()
+    public function leaveRequests(Request $request)
     {
         $user = auth()->user();
+        $perPage = min(max((int) $request->input('per_page', 10), 10), 100);
         $leaveRequests = LeaveRequest::where('user_id', $user->id)
             ->with('reviewer')
+            ->when($request->filled('status'), fn (Builder $builder) => $builder->where('status', $request->status))
             ->orderBy('created_at', 'desc')
-            ->paginate(15);
+            ->paginate($perPage)
+            ->withQueryString();
 
-        return view('employee.leave-requests.index', compact('leaveRequests'));
+        $leaveStats = [
+            'pending' => LeaveRequest::where('user_id', $user->id)->where('status', 'pending')->count(),
+            'approved' => LeaveRequest::where('user_id', $user->id)->where('status', 'approved')->count(),
+            'rejected' => LeaveRequest::where('user_id', $user->id)->where('status', 'rejected')->count(),
+        ];
+
+        return view('employee.leave-requests.index', compact('leaveRequests', 'leaveStats', 'perPage'));
     }
 
     /**

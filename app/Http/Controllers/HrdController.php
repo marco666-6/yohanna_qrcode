@@ -14,6 +14,7 @@ use App\Exports\AttendanceExport;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\LeaveRequestNotification;
+use Illuminate\Database\Eloquent\Builder;
 
 class HrdController extends Controller
 {
@@ -27,7 +28,7 @@ class HrdController extends Controller
      */
     public function dashboard()
     {
-        $today = now()->format('Y-m-d');
+        $today = now()->toDateString();
         
         // Today's statistics
         $totalEmployees = User::where('role', 'employee')->where('is_active', true)->count();
@@ -38,42 +39,73 @@ class HrdController extends Controller
         $todayLate = Attendance::where('date', $today)
             ->where('status', 'late')
             ->count();
+        $todayIncomplete = Attendance::where('date', $today)
+            ->where('status', 'incomplete')
+            ->count();
 
         // Pending leave requests
         $pendingLeaves = LeaveRequest::where('status', 'pending')->count();
 
         // Monthly statistics
-        $monthStart = now()->startOfMonth()->format('Y-m-d');
-        $monthEnd = now()->endOfMonth()->format('Y-m-d');
+        $monthStart = now()->startOfMonth()->toDateString();
+        $monthEnd = now()->endOfMonth()->toDateString();
+        $monthlyQuery = Attendance::query()->whereBetween('date', [$monthStart, $monthEnd]);
         
         $monthlyStats = [
-            'total_attendance' => Attendance::whereBetween('date', [$monthStart, $monthEnd])->count(),
-            'on_time' => Attendance::whereBetween('date', [$monthStart, $monthEnd])
-                ->where('status', 'on_time')->count(),
-            'late' => Attendance::whereBetween('date', [$monthStart, $monthEnd])
-                ->where('status', 'late')->count(),
-            'incomplete' => Attendance::whereBetween('date', [$monthStart, $monthEnd])
-                ->where('status', 'incomplete')->count(),
+            'total_attendance' => (clone $monthlyQuery)->count(),
+            'on_time' => (clone $monthlyQuery)->where('status', 'on_time')->count(),
+            'late' => (clone $monthlyQuery)->where('status', 'late')->count(),
+            'incomplete' => (clone $monthlyQuery)->where('status', 'incomplete')->count(),
+            'hours' => round((float) (clone $monthlyQuery)->sum('total_hours'), 2),
         ];
 
         // Recent activities
         $recentActivities = ActivityLog::with('user')
             ->orderBy('created_at', 'desc')
-            ->limit(10)
+            ->limit(8)
             ->get();
 
-        // Attendance chart data (last 7 days)
         $chartData = $this->getWeeklyChartData();
+
+        $departmentStats = User::query()
+            ->employees()
+            ->active()
+            ->selectRaw("COALESCE(NULLIF(department, ''), 'Belum diatur') as department_name, COUNT(*) as total")
+            ->groupBy('department_name')
+            ->orderByDesc('total')
+            ->limit(6)
+            ->get();
+
+        $lateLeaders = User::query()
+            ->employees()
+            ->withCount(['attendances as late_count' => function ($query) use ($monthStart, $monthEnd) {
+                $query->whereBetween('date', [$monthStart, $monthEnd])->where('status', 'late');
+            }])
+            ->orderByDesc('late_count')
+            ->orderBy('name')
+            ->limit(5)
+            ->get();
+
+        $pendingLeaveItems = LeaveRequest::query()
+            ->with('user')
+            ->where('status', 'pending')
+            ->orderBy('created_at')
+            ->limit(5)
+            ->get();
 
         return view('hrd.dashboard', compact(
             'totalEmployees',
             'todayPresent',
             'todayAbsent',
             'todayLate',
+            'todayIncomplete',
             'pendingLeaves',
             'monthlyStats',
             'recentActivities',
-            'chartData'
+            'chartData',
+            'departmentStats',
+            'lateLeaders',
+            'pendingLeaveItems'
         ));
     }
 
@@ -115,6 +147,7 @@ class HrdController extends Controller
      */
     public function attendanceReport(Request $request)
     {
+        $perPage = min(max((int) $request->input('per_page', 20), 10), 100);
         $query = Attendance::with(['user', 'shift']);
 
         // Filters
@@ -137,22 +170,51 @@ class HrdController extends Controller
             $query->where('user_id', $request->user_id);
         }
 
+        if ($request->filled('search')) {
+            $search = trim((string) $request->input('search'));
+            $query->whereHas('user', function (Builder $userQuery) use ($search) {
+                $userQuery->where('name', 'like', "%{$search}%")
+                    ->orWhere('employee_id', 'like', "%{$search}%")
+                    ->orWhere('department', 'like', "%{$search}%");
+            });
+        }
+
+        $statsQuery = clone $query;
         $attendances = $query->orderBy('date', 'desc')
             ->orderBy('check_in', 'desc')
-            ->paginate(20);
+            ->paginate($perPage)
+            ->withQueryString();
 
         // Statistics
         $stats = [
-            'total' => $query->count(),
-            'on_time' => (clone $query)->where('status', 'on_time')->count(),
-            'late' => (clone $query)->where('status', 'late')->count(),
-            'incomplete' => (clone $query)->where('status', 'incomplete')->count(),
-            'absent' => (clone $query)->where('status', 'absent')->count(),
+            'total' => (clone $statsQuery)->count(),
+            'on_time' => (clone $statsQuery)->where('status', 'on_time')->count(),
+            'late' => (clone $statsQuery)->where('status', 'late')->count(),
+            'incomplete' => (clone $statsQuery)->where('status', 'incomplete')->count(),
+            'absent' => (clone $statsQuery)->where('status', 'absent')->count(),
+            'hours' => round((float) (clone $statsQuery)->sum('total_hours'), 2),
+        ];
+
+        $chartBase = (clone $statsQuery)
+            ->selectRaw('DATE(date) as report_date')
+            ->selectRaw("SUM(CASE WHEN status = 'on_time' THEN 1 ELSE 0 END) as on_time_total")
+            ->selectRaw("SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END) as late_total")
+            ->selectRaw("SUM(CASE WHEN status = 'incomplete' THEN 1 ELSE 0 END) as incomplete_total")
+            ->groupBy('report_date')
+            ->orderBy('report_date')
+            ->limit(14)
+            ->get();
+
+        $reportChart = [
+            'labels' => $chartBase->pluck('report_date')->map(fn ($date) => Carbon::parse($date)->translatedFormat('d M')),
+            'on_time' => $chartBase->pluck('on_time_total'),
+            'late' => $chartBase->pluck('late_total'),
+            'incomplete' => $chartBase->pluck('incomplete_total'),
         ];
 
         $employees = User::where('role', 'employee')->orderBy('name')->get();
 
-        return view('hrd.attendance-report', compact('attendances', 'stats', 'employees'));
+        return view('hrd.attendance-report', compact('attendances', 'stats', 'employees', 'perPage', 'reportChart'));
     }
 
     /**
@@ -204,13 +266,23 @@ class HrdController extends Controller
      */
     public function leaveRequests(Request $request)
     {
+        $perPage = min(max((int) $request->input('per_page', 15), 10), 100);
         $query = LeaveRequest::with(['user', 'reviewer']);
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        $leaveRequests = $query->orderBy('created_at', 'desc')->paginate(15);
+        if ($request->filled('search')) {
+            $search = trim((string) $request->input('search'));
+            $query->whereHas('user', function (Builder $userQuery) use ($search) {
+                $userQuery->where('name', 'like', "%{$search}%")
+                    ->orWhere('employee_id', 'like', "%{$search}%")
+                    ->orWhere('department', 'like', "%{$search}%");
+            });
+        }
+
+        $leaveRequests = $query->orderBy('created_at', 'desc')->paginate($perPage)->withQueryString();
 
         $stats = [
             'pending' => LeaveRequest::where('status', 'pending')->count(),
@@ -218,7 +290,7 @@ class HrdController extends Controller
             'rejected' => LeaveRequest::where('status', 'rejected')->count(),
         ];
 
-        return view('hrd.leave-requests.index', compact('leaveRequests', 'stats'));
+        return view('hrd.leave-requests.index', compact('leaveRequests', 'stats', 'perPage'));
     }
 
     /**

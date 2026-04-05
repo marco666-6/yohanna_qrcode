@@ -1,319 +1,242 @@
 @extends('layouts.app')
 
-@section('title', 'Admin Dashboard')
-
-@section('sidebar')
-    <li class="nav-item">
-        <a class="nav-link active" href="{{ route('admin.dashboard') }}">
-            <i class="bi bi-speedometer2"></i> Dashboard
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="{{ route('admin.employees') }}">
-            <i class="bi bi-people"></i> Kelola Karyawan
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="{{ route('admin.shifts') }}">
-            <i class="bi bi-clock-history"></i> Kelola Shift
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="{{ route('admin.attendances') }}">
-            <i class="bi bi-calendar-check"></i> Kelola Kehadiran
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="{{ route('admin.qr-code') }}">
-            <i class="bi bi-qr-code"></i> QR Code
-        </a>
-    </li>
-@endsection
+@section('title', 'Dashboard Admin')
+@section('page-kicker', 'Control Center')
+@section('page-title', 'Dashboard Admin')
+@section('page-subtitle', 'Pantau kesiapan operasional absensi, aktivitas admin, dan kondisi kehadiran harian dari satu panel.')
 
 @section('content')
-<div class="row">
-    <div class="col-12">
-        <h2 class="page-title">
-            <i class="bi bi-speedometer2 me-2"></i>
-            Dashboard Administrator
-        </h2>
-        <p class="text-muted">Selamat datang, {{ auth()->user()->name }}! Berikut adalah ringkasan sistem hari ini.</p>
-    </div>
-</div>
-
-<!-- Statistics Cards -->
-<div class="row g-3 mb-4">
-    <div class="col-md-3">
-        <div class="card stat-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1">Total Karyawan</p>
-                        <h3 class="mb-0">{{ $totalEmployees }}</h3>
-                        <small class="text-success">
-                            <i class="bi bi-check-circle me-1"></i>
-                            {{ $activeEmployees }} Aktif
-                        </small>
-                    </div>
-                    <div class="text-primary" style="font-size: 2.5rem;">
-                        <i class="bi bi-people"></i>
+<div class="d-grid gap-4">
+    <div class="hero-panel">
+        <div class="row g-4 align-items-center position-relative">
+            <div class="col-xl-8">
+                <div class="small text-uppercase fw-bold muted" style="letter-spacing:.2em;">Attendance Overview</div>
+                <h2 class="mt-2 mb-2 fw-bold">Operasional absensi hari ini berjalan {{ $attendanceRate >= 85 ? 'stabil' : 'perlu perhatian' }}</h2>
+                <p class="muted mb-4">Sistem disesuaikan dengan alur proposal: admin mengelola karyawan, shift, QR aktif, dan koreksi data tanpa memutus alur HRD maupun karyawan.</p>
+                <div class="d-flex flex-wrap gap-2">
+                    <span class="badge rounded-pill text-bg-light px-3 py-2">{{ $activeEmployees }} karyawan aktif</span>
+                    <span class="badge rounded-pill text-bg-light px-3 py-2">{{ $todayAttendance }} hadir hari ini</span>
+                    <span class="badge rounded-pill text-bg-light px-3 py-2">{{ $totalShifts }} shift terdaftar</span>
+                    <span class="badge rounded-pill text-bg-light px-3 py-2">{{ $activeQrCodes->count() }} QR sedang aktif</span>
+                </div>
+            </div>
+            <div class="col-xl-4">
+                <div class="bg-white bg-opacity-10 rounded-4 p-4 border border-white border-opacity-10">
+                    <div class="small muted">Attendance Rate</div>
+                    <div class="display-6 fw-bold">{{ $attendanceRate }}%</div>
+                    <div class="muted mb-3">Persentase hadir terhadap total karyawan aktif hari ini.</div>
+                    <div class="d-flex justify-content-between small text-white-50">
+                        <span>Tepat waktu {{ $todayOnTime }}</span>
+                        <span>Terlambat {{ $todayLate }}</span>
+                        <span>Absen {{ $todayAbsent }}</span>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="col-md-3">
-        <div class="card stat-card success">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
+    <div class="row g-3">
+        @foreach([
+            ['label' => 'Karyawan Aktif', 'value' => $activeEmployees, 'helper' => $inactiveEmployees . ' nonaktif', 'icon' => 'bi-people', 'tone' => 'primary'],
+            ['label' => 'Hadir Hari Ini', 'value' => $todayAttendance, 'helper' => $attendanceRate . '% dari total aktif', 'icon' => 'bi-calendar-check', 'tone' => 'success'],
+            ['label' => 'Terlambat', 'value' => $todayLate, 'helper' => $todayIncomplete . ' belum check-out', 'icon' => 'bi-alarm', 'tone' => 'warning'],
+            ['label' => 'Tidak Hadir', 'value' => $todayAbsent, 'helper' => 'Perlu evaluasi atau koreksi', 'icon' => 'bi-x-octagon', 'tone' => 'danger'],
+        ] as $item)
+            <div class="col-6 col-xl-3">
+                <div class="stat-card {{ $item['tone'] }}">
+                    <div class="stat-icon"><i class="bi {{ $item['icon'] }}"></i></div>
+                    <div class="stat-value">{{ $item['value'] }}</div>
+                    <div class="stat-label">{{ $item['label'] }}</div>
+                    <div class="stat-helper">{{ $item['helper'] }}</div>
+                </div>
+            </div>
+        @endforeach
+    </div>
+
+    <div class="row g-4">
+        <div class="col-xl-8">
+            <div class="card h-100">
+                <div class="card-header d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
                     <div>
-                        <p class="text-muted mb-1">Hadir Hari Ini</p>
-                        <h3 class="mb-0">{{ $todayAttendance }}</h3>
-                        <small class="text-success">
-                            <i class="bi bi-arrow-up me-1"></i>
-                            {{ $todayOnTime }} Tepat Waktu
-                        </small>
+                        <div class="page-kicker">Analytics</div>
+                        <div class="fw-bold fs-5">Tren operasional 7 hari terakhir</div>
                     </div>
-                    <div class="text-success" style="font-size: 2.5rem;">
-                        <i class="bi bi-check-circle"></i>
+                    <div class="d-flex flex-wrap gap-2">
+                        <select class="form-select" id="adminChartType" style="min-width:120px;">
+                            <option value="bar">Bar</option>
+                            <option value="line">Line</option>
+                            <option value="doughnut">Doughnut</option>
+                        </select>
+                        <select class="form-select" id="adminChartDataset" style="min-width:190px;">
+                            <option value="attendance">Kehadiran Harian</option>
+                            <option value="punctuality">Tepat Waktu vs Terlambat</option>
+                            <option value="department">Sebaran Departemen</option>
+                            <option value="shift">Distribusi Shift</option>
+                        </select>
                     </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-shell">
+                        <canvas id="adminDashboardChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <div class="page-kicker">Quick Access</div>
+                    <div class="fw-bold fs-5">Aksi cepat admin</div>
+                </div>
+                <div class="card-body d-flex flex-column gap-3">
+                    @foreach([
+                        ['label' => 'Tambah Karyawan', 'route' => route('admin.employees.create'), 'icon' => 'bi-person-plus', 'tone' => 'primary'],
+                        ['label' => 'Kelola Shift', 'route' => route('admin.shifts'), 'icon' => 'bi-clock-history', 'tone' => 'success'],
+                        ['label' => 'Koreksi Kehadiran', 'route' => route('admin.attendances'), 'icon' => 'bi-pencil-square', 'tone' => 'warning'],
+                        ['label' => 'Generate QR Shift', 'route' => route('admin.qr-code'), 'icon' => 'bi-qr-code', 'tone' => 'info'],
+                    ] as $action)
+                        <a href="{{ $action['route'] }}" class="quick-link">
+                            <span class="quick-link-icon bg-{{ $action['tone'] }} bg-opacity-10 text-{{ $action['tone'] }}">
+                                <i class="bi {{ $action['icon'] }}"></i>
+                            </span>
+                            <div>
+                                <div class="fw-semibold">{{ $action['label'] }}</div>
+                                <div class="small text-muted">Masuk ke modul terkait tanpa memutus alur kerja.</div>
+                            </div>
+                            <i class="bi bi-chevron-right ms-auto text-muted"></i>
+                        </a>
+                    @endforeach
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="col-md-3">
-        <div class="card stat-card warning">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1">Terlambat Hari Ini</p>
-                        <h3 class="mb-0">{{ $todayLate }}</h3>
-                        <small class="text-warning">
-                            <i class="bi bi-exclamation-triangle me-1"></i>
-                            Perlu Perhatian
-                        </small>
-                    </div>
-                    <div class="text-warning" style="font-size: 2.5rem;">
-                        <i class="bi bi-clock-history"></i>
-                    </div>
+    <div class="row g-4">
+        <div class="col-xl-5">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="fw-bold fs-5">QR shift aktif</div>
+                    <a href="{{ route('admin.qr-code') }}" class="btn btn-outline-primary btn-sm">Kelola QR</a>
+                </div>
+                <div class="card-body">
+                    @forelse($activeQrCodes as $qr)
+                        <div class="data-summary-item mb-3">
+                            <div class="d-flex justify-content-between align-items-start gap-3">
+                                <div>
+                                    <div class="fw-semibold">{{ $qr->shift->name ?? 'Shift tidak ditemukan' }}</div>
+                                    <div class="small text-muted">{{ $qr->type === 'check_in' ? 'QR Check-in' : 'QR Check-out' }}</div>
+                                </div>
+                                <span class="badge rounded-pill {{ $qr->type === 'check_in' ? 'badge-soft-success' : 'badge-soft-info' }}">
+                                    {{ $qr->expires_at->format('H:i:s') }}
+                                </span>
+                            </div>
+                        </div>
+                    @empty
+                        <div class="empty-state">
+                            <i class="bi bi-qr-code"></i>
+                            <div class="fw-semibold mb-1">Belum ada QR aktif</div>
+                            <div class="small mb-3">Generate QR berdasarkan shift untuk mulai proses absensi.</div>
+                            <a href="{{ route('admin.qr-code') }}" class="btn btn-primary btn-sm">Generate QR</a>
+                        </div>
+                    @endforelse
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-7">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="fw-bold fs-5">Aktivitas terbaru</div>
+                    <span class="soft-chip"><i class="bi bi-activity"></i>{{ $recentActivities->count() }} aktivitas</span>
+                </div>
+                <div class="card-body">
+                    @forelse($recentActivities as $activity)
+                        <div class="d-flex gap-3 py-3 border-bottom" style="border-color:rgba(129,101,104,.1)!important;">
+                            <div class="quick-link-icon bg-light text-primary flex-shrink-0">
+                                <i class="bi {{ str_contains($activity->action, 'DELETE') ? 'bi-trash3' : (str_contains($activity->action, 'UPDATE') ? 'bi-pencil' : (str_contains($activity->action, 'CHECK') ? 'bi-calendar-check' : 'bi-stars')) }}"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="fw-semibold">{{ $activity->user->name ?? 'Sistem' }}</div>
+                                <div class="small text-muted">{{ $activity->description }}</div>
+                            </div>
+                            <div class="small text-muted text-end">{{ $activity->created_at->diffForHumans() }}</div>
+                        </div>
+                    @empty
+                        <div class="empty-state">
+                            <i class="bi bi-clock-history"></i>
+                            <div class="fw-semibold mb-1">Belum ada aktivitas</div>
+                            <div class="small">Aktivitas login, kelola data, dan absensi akan muncul di sini.</div>
+                        </div>
+                    @endforelse
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="col-md-3">
-        <div class="card stat-card danger">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1">Tidak Hadir</p>
-                        <h3 class="mb-0">{{ $todayAbsent }}</h3>
-                        <small class="text-danger">
-                            <i class="bi bi-x-circle me-1"></i>
-                            Hari Ini
-                        </small>
-                    </div>
-                    <div class="text-danger" style="font-size: 2.5rem;">
-                        <i class="bi bi-x-octagon"></i>
-                    </div>
+    <div class="row g-4">
+        <div class="col-xl-6">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="fw-bold fs-5">Karyawan terbaru</div>
+                    <a href="{{ route('admin.employees') }}" class="btn btn-outline-primary btn-sm">Semua Data</a>
                 </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-3">
-    <!-- Active QR Codes -->
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="bi bi-qr-code me-2"></i>
-                    QR Code Aktif
-                </h5>
-                <a href="{{ route('admin.qr-code') }}" class="btn btn-sm btn-primary">
-                    <i class="bi bi-plus-circle me-1"></i>
-                    Kelola QR
-                </a>
-            </div>
-            <div class="card-body">
-                @if($activeQrCodes->count() > 0)
+                <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
+                        <table class="table align-middle mb-0">
+                            <thead class="table-light">
                                 <tr>
+                                    <th class="ps-4">Nama</th>
+                                    <th>Departemen</th>
                                     <th>Shift</th>
-                                    <th>Tipe</th>
-                                    <th>Kadaluarsa</th>
                                     <th>Status</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach($activeQrCodes as $qr)
-                                <tr>
-                                    <td>
-                                        <strong>{{ $qr->shift->name ?? '-' }}</strong>
-                                    </td>
-                                    <td>
-                                        @if($qr->type === 'check_in')
-                                            <span class="badge bg-success">Check-In</span>
-                                        @else
-                                            <span class="badge bg-info">Check-Out</span>
-                                        @endif
-                                    </td>
-                                    <td>
-                                        <small class="text-muted">
-                                            {{ $qr->expires_at->format('H:i:s') }}
-                                        </small>
-                                    </td>
-                                    <td>
-                                        @if($qr->isValid())
-                                            <span class="badge bg-success">
-                                                <i class="bi bi-check-circle"></i> Aktif
+                                @forelse($recentEmployees as $employee)
+                                    <tr>
+                                        <td class="ps-4">
+                                            <div class="fw-semibold">{{ $employee->name }}</div>
+                                            <div class="small text-muted">{{ $employee->employee_id }}</div>
+                                        </td>
+                                        <td>{{ $employee->department ?: 'Belum diatur' }}</td>
+                                        <td>{{ $employee->shift?->name ?: '-' }}</td>
+                                        <td>
+                                            <span class="badge rounded-pill {{ $employee->is_active ? 'badge-soft-success' : 'badge-soft-danger' }}">
+                                                {{ $employee->is_active ? 'Aktif' : 'Nonaktif' }}
                                             </span>
-                                        @else
-                                            <span class="badge bg-danger">
-                                                <i class="bi bi-x-circle"></i> Expired
-                                            </span>
-                                        @endif
-                                    </td>
-                                </tr>
-                                @endforeach
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="4" class="text-center py-4 text-muted">Belum ada data karyawan.</td></tr>
+                                @endforelse
                             </tbody>
                         </table>
-                    </div>
-                @else
-                    <div class="text-center py-4">
-                        <i class="bi bi-qr-code text-muted" style="font-size: 3rem;"></i>
-                        <p class="text-muted mt-2">Tidak ada QR Code aktif saat ini</p>
-                        <a href="{{ route('admin.qr-code') }}" class="btn btn-sm btn-primary">
-                            Generate QR Code
-                        </a>
-                    </div>
-                @endif
-            </div>
-        </div>
-    </div>
-
-    <!-- Recent Activities -->
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header bg-white">
-                <h5 class="mb-0">
-                    <i class="bi bi-activity me-2"></i>
-                    Aktivitas Terbaru
-                </h5>
-            </div>
-            <div class="card-body" style="max-height: 400px; overflow-y: auto;">
-                @if($recentActivities->count() > 0)
-                    <div class="list-group list-group-flush">
-                        @foreach($recentActivities as $activity)
-                        <div class="list-group-item px-0">
-                            <div class="d-flex align-items-start">
-                                <div class="flex-shrink-0">
-                                    @if(str_contains($activity->action, 'LOGIN'))
-                                        <i class="bi bi-box-arrow-in-right text-success fs-5"></i>
-                                    @elseif(str_contains($activity->action, 'LOGOUT'))
-                                        <i class="bi bi-box-arrow-right text-danger fs-5"></i>
-                                    @elseif(str_contains($activity->action, 'CHECK'))
-                                        <i class="bi bi-calendar-check text-primary fs-5"></i>
-                                    @else
-                                        <i class="bi bi-gear text-secondary fs-5"></i>
-                                    @endif
-                                </div>
-                                <div class="flex-grow-1 ms-3">
-                                    <div class="d-flex justify-content-between">
-                                        <strong>{{ $activity->user->name ?? 'System' }}</strong>
-                                        <small class="text-muted">
-                                            {{ $activity->created_at->diffForHumans() }}
-                                        </small>
-                                    </div>
-                                    <small class="text-muted">{{ $activity->description }}</small>
-                                </div>
-                            </div>
-                        </div>
-                        @endforeach
-                    </div>
-                @else
-                    <div class="text-center py-4">
-                        <i class="bi bi-activity text-muted" style="font-size: 3rem;"></i>
-                        <p class="text-muted mt-2">Belum ada aktivitas</p>
-                    </div>
-                @endif
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Quick Actions -->
-<div class="row g-3 mt-3">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header bg-white">
-                <h5 class="mb-0">
-                    <i class="bi bi-lightning me-2"></i>
-                    Aksi Cepat
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-md-3">
-                        <a href="{{ route('admin.employees.create') }}" class="btn btn-outline-primary w-100 py-3">
-                            <i class="bi bi-person-plus d-block mb-2" style="font-size: 2rem;"></i>
-                            <strong>Tambah Karyawan</strong>
-                        </a>
-                    </div>
-                    <div class="col-md-3">
-                        <a href="{{ route('admin.shifts') }}" class="btn btn-outline-success w-100 py-3">
-                            <i class="bi bi-clock d-block mb-2" style="font-size: 2rem;"></i>
-                            <strong>Kelola Shift</strong>
-                        </a>
-                    </div>
-                    <div class="col-md-3">
-                        <a href="{{ route('admin.attendances') }}" class="btn btn-outline-info w-100 py-3">
-                            <i class="bi bi-calendar-check d-block mb-2" style="font-size: 2rem;"></i>
-                            <strong>Kelola Kehadiran</strong>
-                        </a>
-                    </div>
-                    <div class="col-md-3">
-                        <a href="{{ route('admin.employees.export') }}" class="btn btn-outline-warning w-100 py-3">
-                            <i class="bi bi-download d-block mb-2" style="font-size: 2rem;"></i>
-                            <strong>Export Data</strong>
-                        </a>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
-</div>
 
-<!-- System Info -->
-<div class="row g-3 mt-3">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <div class="row text-center">
-                    <div class="col-md-3">
-                        <i class="bi bi-calendar3 text-primary fs-3"></i>
-                        <p class="mb-0 mt-2"><strong>{{ now()->format('d F Y') }}</strong></p>
-                        <small class="text-muted">Tanggal Hari Ini</small>
+        <div class="col-xl-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <div class="fw-bold fs-5">Ringkasan keputusan hari ini</div>
+                </div>
+                <div class="card-body data-summary">
+                    <div class="data-summary-item">
+                        <div class="small text-muted">Kehadiran valid</div>
+                        <div class="fs-4 fw-bold">{{ $todayOnTime + $todayLate }}</div>
+                        <div class="small text-muted">Tercatat melalui check-in aktif dan siap dipantau HRD.</div>
                     </div>
-                    <div class="col-md-3">
-                        <i class="bi bi-clock text-success fs-3"></i>
-                        <p class="mb-0 mt-2"><strong id="currentTime">{{ now()->format('H:i:s') }}</strong></p>
-                        <small class="text-muted">Waktu Saat Ini</small>
+                    <div class="data-summary-item">
+                        <div class="small text-muted">Data perlu tindak lanjut</div>
+                        <div class="fs-4 fw-bold">{{ $todayIncomplete + $todayAbsent }}</div>
+                        <div class="small text-muted">Gabungan belum check-out dan belum hadir yang perlu ditinjau.</div>
                     </div>
-                    <div class="col-md-3">
-                        <i class="bi bi-diagram-3 text-info fs-3"></i>
-                        <p class="mb-0 mt-2"><strong>{{ $totalShifts }}</strong></p>
-                        <small class="text-muted">Total Shift</small>
-                    </div>
-                    <div class="col-md-3">
-                        <i class="bi bi-shield-check text-warning fs-3"></i>
-                        <p class="mb-0 mt-2"><strong>Administrator</strong></p>
-                        <small class="text-muted">Level Akses Anda</small>
+                    <div class="data-summary-item">
+                        <div class="small text-muted">Basis data karyawan</div>
+                        <div class="fs-4 fw-bold">{{ $totalEmployees }}</div>
+                        <div class="small text-muted">Gunakan filter, pagination, dan export agar tetap ringan saat data tumbuh besar.</div>
                     </div>
                 </div>
             </div>
@@ -324,16 +247,71 @@
 
 @push('scripts')
 <script>
-    // Update current time every second
-    function updateTime() {
-        const now = new Date();
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        const seconds = String(now.getSeconds()).padStart(2, '0');
-        document.getElementById('currentTime').textContent = `${hours}:${minutes}:${seconds}`;
-    }
-    
-    setInterval(updateTime, 1000);
-    updateTime();
+    document.addEventListener('DOMContentLoaded', function () {
+        const chartCanvas = document.getElementById('adminDashboardChart');
+        const typeSelect = document.getElementById('adminChartType');
+        const datasetSelect = document.getElementById('adminChartDataset');
+        let chart;
+
+        const datasets = {
+            attendance: {
+                labels: @json($weeklyTrend['labels']),
+                datasets: [
+                    { label: 'Hadir', data: @json($weeklyTrend['present']), borderColor: '#c97570', backgroundColor: 'rgba(201,117,112,.25)' },
+                    { label: 'Absen', data: @json($weeklyTrend['absent']), borderColor: '#ba5d57', backgroundColor: 'rgba(186,93,87,.2)' }
+                ]
+            },
+            punctuality: {
+                labels: @json($weeklyTrend['labels']),
+                datasets: [
+                    { label: 'Tepat Waktu', data: @json($weeklyTrend['on_time']), borderColor: '#4f8a66', backgroundColor: 'rgba(79,138,102,.24)' },
+                    { label: 'Terlambat', data: @json($weeklyTrend['late']), borderColor: '#c88a4d', backgroundColor: 'rgba(200,138,77,.24)' }
+                ]
+            },
+            department: {
+                labels: @json($departmentBreakdown->pluck('department_name')),
+                datasets: [
+                    { label: 'Karyawan', data: @json($departmentBreakdown->pluck('total')), borderColor: '#c97570', backgroundColor: ['#c97570','#df9a95','#8b5557','#f0c6c3','#ba5d57','#e5b5aa'] }
+                ]
+            },
+            shift: {
+                labels: @json($shiftBreakdown->pluck('name')),
+                datasets: [
+                    { label: 'Karyawan per Shift', data: @json($shiftBreakdown->pluck('employee_total')), borderColor: '#8a7fc5', backgroundColor: ['#8a7fc5','#b7a8df','#c97570','#df9a95','#4f8a66','#c88a4d'] }
+                ]
+            }
+        };
+
+        function renderChart() {
+            const selected = datasets[datasetSelect.value];
+            const selectedType = typeSelect.value;
+            if (chart) chart.destroy();
+            chart = new Chart(chartCanvas, {
+                type: selectedType,
+                data: {
+                    labels: selected.labels,
+                    datasets: selected.datasets.map(dataset => ({
+                        ...dataset,
+                        fill: selectedType === 'line',
+                        tension: .35,
+                        borderWidth: 2,
+                        pointBackgroundColor: dataset.borderColor
+                    }))
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } },
+                    scales: selectedType === 'doughnut' ? {} : {
+                        y: { beginAtZero: true, ticks: { precision: 0 } }
+                    }
+                }
+            });
+        }
+
+        typeSelect.addEventListener('change', renderChart);
+        datasetSelect.addEventListener('change', renderChart);
+        renderChart();
+    });
 </script>
 @endpush

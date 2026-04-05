@@ -31,16 +31,17 @@ class DatabaseSeeder extends Seeder
         // QR CODES
         // ===============================
         $qrCodes = [];
+        $shifts = DB::table('shifts')->get();
 
-        foreach (['check_in', 'check_out'] as $type) {
-            for ($i = 1; $i <= 10; $i++) {
+        foreach ($shifts as $shift) {
+            foreach (['check_in', 'check_out'] as $type) {
                 $qrCodes[] = [
                     'code' => strtoupper($faker->uuid),
                     'type' => $type,
-                    'shift_id' => rand(1, 3),
-                    'generated_at' => now()->subMinutes(rand(1, 30)),
-                    'expires_at' => now()->addMinutes(30),
-                    'is_active' => true,
+                    'shift_id' => $shift->id,
+                    'generated_at' => now()->subDays(rand(1, 5)),
+                    'expires_at' => now()->subDays(rand(1, 5))->addSeconds(30),
+                    'is_active' => false,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ];

@@ -59,14 +59,22 @@ class AttendanceController extends Controller
             ], 400);
         }
 
+        if (!$qrCode->isWithinWindow()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'QR Code berada di luar window absensi yang diizinkan',
+            ], 400);
+        }
+
         $today = now()->format('Y-m-d');
-        $attendance = Attendance::where('user_id', $user->id)
-            ->where('date', $today)
-            ->first();
 
         if ($qrCode->type === 'check_in') {
+            $attendance = Attendance::where('user_id', $user->id)
+                ->where('date', $today)
+                ->first();
             return $this->processCheckIn($user, $qrCode, $attendance);
         } else {
+            $attendance = Attendance::openForCheckout($user->id, $qrCode->shift_id)->first();
             return $this->processCheckOut($user, $qrCode, $attendance);
         }
     }
@@ -145,7 +153,10 @@ class AttendanceController extends Controller
         }
 
         $checkOutTime = now();
-        $checkInTime = Carbon::parse($attendance->check_in);
+        $checkInTime = Carbon::parse($attendance->date->format('Y-m-d') . ' ' . $attendance->check_in);
+        if ($checkOutTime->lte($checkInTime)) {
+            $checkOutTime->addDay();
+        }
         $totalHours = $checkOutTime->diffInMinutes($checkInTime) / 60;
 
         $attendance->update([
@@ -203,6 +214,12 @@ class AttendanceController extends Controller
             ->where('date', $today)
             ->with('shift')
             ->first();
+
+        if (!$attendance) {
+            $attendance = Attendance::openForCheckout($user->id)
+                ->with('shift')
+                ->first();
+        }
 
         return response()->json([
             'success' => true,
