@@ -424,24 +424,21 @@ class HrdController extends Controller
      */
     public function statistics()
     {
-        // Overall statistics
-        $totalEmployees = User::where('role', 'employee')->where('is_active', true)->count();
+        $totalEmployees = User::query()->employees()->active()->count();
         $totalAttendance = Attendance::count();
-        
-        // Monthly data for chart
         $monthlyData = $this->getMonthlyStatistics();
-        
-        // Department statistics
-        $departmentStats = User::where('role', 'employee')
-            ->where('is_active', true)
-            ->selectRaw('department, COUNT(*) as count')
-            ->groupBy('department')
+
+        $departmentStats = User::query()
+            ->employees()
+            ->active()
+            ->selectRaw("COALESCE(NULLIF(department, ''), 'Belum diatur') as department_name, COUNT(*) as total")
+            ->groupBy('department_name')
+            ->orderByDesc('total')
             ->get();
 
-        // Current month statistics with absent count
         $monthStart = now()->startOfMonth()->format('Y-m-d');
         $monthEnd = now()->endOfMonth()->format('Y-m-d');
-        
+
         $monthlyStats = [
             'total_attendance' => Attendance::whereBetween('date', [$monthStart, $monthEnd])->count(),
             'on_time' => Attendance::whereBetween('date', [$monthStart, $monthEnd])
@@ -454,7 +451,13 @@ class HrdController extends Controller
                 ->where('status', 'absent')->count(),
         ];
 
-        return view('hrd.statistics', compact('totalEmployees', 'totalAttendance', 'monthlyData', 'departmentStats', 'monthlyStats'));
+        $leaveStats = [
+            'pending' => LeaveRequest::pending()->count(),
+            'approved' => LeaveRequest::approved()->count(),
+            'rejected' => LeaveRequest::rejected()->count(),
+        ];
+
+        return view('hrd.statistics', compact('totalEmployees', 'totalAttendance', 'monthlyData', 'departmentStats', 'monthlyStats', 'leaveStats'));
     }
 
     /**

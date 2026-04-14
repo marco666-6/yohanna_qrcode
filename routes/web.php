@@ -48,6 +48,12 @@ Route::middleware('auth')->group(function () {
         
         // QR Code
         Route::get('/qr-code', [AdminController::class, 'qrCodePage'])->name('qr-code');
+
+        // Leave Requests
+        Route::get('/leave-requests', [AdminController::class, 'leaveRequests'])->name('leave-requests');
+        Route::get('/leave-requests/{id}', [AdminController::class, 'leaveRequestDetail'])->name('leave-requests.detail');
+        Route::post('/leave-requests/{id}/approve', [AdminController::class, 'approveLeaveRequest'])->name('leave-requests.approve');
+        Route::post('/leave-requests/{id}/reject', [AdminController::class, 'rejectLeaveRequest'])->name('leave-requests.reject');
     });
 
     // EMPLOYEE ROUTES

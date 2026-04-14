@@ -7,11 +7,15 @@ use App\Models\Shift;
 use App\Models\Attendance;
 use App\Models\QrCode;
 use App\Models\ActivityLog;
+use App\Models\LeaveRequest;
+use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\EmployeesExport;
+use App\Mail\LeaveRequestNotification;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -555,5 +559,127 @@ class AdminController extends Controller
     {
         $shifts = Shift::active()->get();
         return view('admin.qr-code', compact('shifts'));
+    }
+
+    /**
+     * Leave Requests Management - Index
+     */
+    public function leaveRequests(Request $request)
+    {
+        $perPage = min(max((int) $request->input('per_page', 15), 10), 100);
+
+        $query = LeaveRequest::with(['user.shift', 'reviewer'])
+            ->when($request->filled('status'), fn (Builder $builder) => $builder->where('status', $request->status))
+            ->when($request->filled('leave_type'), fn (Builder $builder) => $builder->where('leave_type', $request->leave_type))
+            ->when($request->filled('search'), function (Builder $builder) use ($request) {
+                $search = trim((string) $request->input('search'));
+                $builder->whereHas('user', function (Builder $userQuery) use ($search) {
+                    $userQuery->where('name', 'like', "%{$search}%")
+                        ->orWhere('employee_id', 'like', "%{$search}%")
+                        ->orWhere('department', 'like', "%{$search}%");
+                });
+            });
+
+        $leaveRequests = $query->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")
+            ->orderByDesc('created_at')
+            ->paginate($perPage)
+            ->withQueryString();
+
+        $stats = [
+            'pending' => LeaveRequest::pending()->count(),
+            'approved' => LeaveRequest::approved()->count(),
+            'rejected' => LeaveRequest::rejected()->count(),
+            'filtered' => (clone $query)->count(),
+        ];
+
+        return view('admin.leave-requests.index', compact('leaveRequests', 'stats', 'perPage'));
+    }
+
+    /**
+     * Leave Requests Management - Detail
+     */
+    public function leaveRequestDetail($id)
+    {
+        $leaveRequest = LeaveRequest::with(['user.shift', 'reviewer'])->findOrFail($id);
+
+        return view('admin.leave-requests.detail', compact('leaveRequest'));
+    }
+
+    /**
+     * Leave Requests Management - Approve
+     */
+    public function approveLeaveRequest(Request $request, $id)
+    {
+        $leaveRequest = LeaveRequest::with('user')->findOrFail($id);
+
+        $request->validate([
+            'review_notes' => 'nullable|string|max:500',
+        ]);
+
+        $leaveRequest->update([
+            'status' => 'approved',
+            'reviewed_by' => auth()->id(),
+            'reviewed_at' => now(),
+            'review_notes' => $request->review_notes,
+        ]);
+
+        Notification::create([
+            'user_id' => $leaveRequest->user_id,
+            'type' => 'leave_approved',
+            'title' => 'Pengajuan Cuti Disetujui',
+            'message' => 'Pengajuan cuti Anda dari ' . formatDate($leaveRequest->start_date) . ' sampai ' . formatDate($leaveRequest->end_date) . ' telah disetujui.',
+            'created_at' => now(),
+        ]);
+
+        try {
+            Mail::to($leaveRequest->user->email)->send(new LeaveRequestNotification($leaveRequest, 'approved'));
+        } catch (\Exception $e) {
+            \Log::error('Failed to send email: ' . $e->getMessage());
+        }
+
+        ActivityLog::log('APPROVE_LEAVE', "Approved leave request for {$leaveRequest->user->name} via admin");
+
+        return redirect()->route('admin.leave-requests')
+            ->with('success', 'Pengajuan cuti berhasil disetujui.');
+    }
+
+    /**
+     * Leave Requests Management - Reject
+     */
+    public function rejectLeaveRequest(Request $request, $id)
+    {
+        $leaveRequest = LeaveRequest::with('user')->findOrFail($id);
+
+        $request->validate([
+            'review_notes' => 'required|string|max:500',
+        ], [
+            'review_notes.required' => 'Alasan penolakan wajib diisi',
+        ]);
+
+        $leaveRequest->update([
+            'status' => 'rejected',
+            'reviewed_by' => auth()->id(),
+            'reviewed_at' => now(),
+            'review_notes' => $request->review_notes,
+        ]);
+
+        Notification::create([
+            'user_id' => $leaveRequest->user_id,
+            'type' => 'leave_rejected',
+            'title' => 'Pengajuan Cuti Ditolak',
+            'message' => 'Pengajuan cuti Anda dari ' . formatDate($leaveRequest->start_date) . ' sampai ' . formatDate($leaveRequest->end_date) . ' ditolak. Alasan: ' . $request->review_notes,
+            'created_at' => now(),
+        ]);
+
+        try {
+            Mail::to($leaveRequest->user->email)->send(new LeaveRequestNotification($leaveRequest, 'rejected'));
+        } catch (\Exception $e) {
+            \Log::error('Failed to send email: ' . $e->getMessage());
+        }
+
+        ActivityLog::log('REJECT_LEAVE', "Rejected leave request for {$leaveRequest->user->name} via admin");
+
+        return redirect()->route('admin.leave-requests')
+            ->with('success', 'Pengajuan cuti berhasil ditolak.');
     }
 }

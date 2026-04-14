@@ -34,6 +34,7 @@
                         ['label' => 'Data Karyawan', 'icon' => 'bi-people', 'route' => 'admin.employees', 'active' => 'admin.employees*'],
                         ['label' => 'Jadwal Shift', 'icon' => 'bi-clock-history', 'route' => 'admin.shifts', 'active' => 'admin.shifts*'],
                         ['label' => 'Kehadiran', 'icon' => 'bi-calendar-check', 'route' => 'admin.attendances', 'active' => 'admin.attendances*'],
+                        ['label' => 'Pengajuan Cuti', 'icon' => 'bi-calendar2-week', 'route' => 'admin.leave-requests', 'active' => 'admin.leave-requests*'],
                         ['label' => 'QR Shift', 'icon' => 'bi-qr-code', 'route' => 'admin.qr-code', 'active' => 'admin.qr-code*'],
                     ],
                 ],
