@@ -1,256 +1,153 @@
 @extends('layouts.app')
 
 @section('title', 'Statistik Kehadiran')
-
-@section('sidebar')
-    <li class="nav-item">
-        <a class="nav-link" href="{{ route('hrd.dashboard') }}">
-            <i class="bi bi-speedometer2"></i> Dashboard
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="{{ route('hrd.attendance-report') }}">
-            <i class="bi bi-file-earmark-text"></i> Laporan Kehadiran
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="{{ route('hrd.leave-requests') }}">
-            <i class="bi bi-calendar-event"></i> Pengajuan Cuti
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link active" href="{{ route('hrd.statistics') }}">
-            <i class="bi bi-graph-up"></i> Statistik
-        </a>
-    </li>
-@endsection
+@section('page-kicker', 'Attendance Analytics')
+@section('page-title', 'Statistik Kehadiran')
+@section('page-subtitle', 'Baca performa kehadiran lintas bulan, distribusi departemen, dan proporsi status dengan chart yang selaras dengan layout baru.')
 
 @section('content')
-<div class="row">
-    <div class="col-12">
-        <h2 class="page-title mb-4">
-            <i class="bi bi-graph-up me-2"></i>
-            Statistik & Analisis Kehadiran
-        </h2>
+<div class="d-grid gap-4">
+    <div class="row g-3">
+        <div class="col-6 col-xl-3">
+            <div class="stat-card">
+                <div class="stat-icon"><i class="bi bi-people"></i></div>
+                <div class="stat-value">{{ $totalEmployees }}</div>
+                <div class="stat-label">Karyawan Aktif</div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="stat-card info">
+                <div class="stat-icon"><i class="bi bi-database"></i></div>
+                <div class="stat-value">{{ number_format($totalAttendance) }}</div>
+                <div class="stat-label">Total Record</div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="stat-card success">
+                <div class="stat-icon"><i class="bi bi-check-circle"></i></div>
+                <div class="stat-value">{{ attendancePercentage($monthlyStats['on_time'] ?? 0, ($monthlyStats['total_attendance'] ?? 0)) }}%</div>
+                <div class="stat-label">On-time Rate</div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="stat-card warning">
+                <div class="stat-icon"><i class="bi bi-alarm"></i></div>
+                <div class="stat-value">{{ attendancePercentage($monthlyStats['late'] ?? 0, ($monthlyStats['total_attendance'] ?? 0)) }}%</div>
+                <div class="stat-label">Late Rate</div>
+            </div>
+        </div>
     </div>
-</div>
 
-<!-- Overall Statistics Cards -->
-<div class="row g-3 mb-4">
-    <div class="col-md-6">
-        <div class="card stat-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
+    <div class="row g-4">
+        <div class="col-xl-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center gap-3">
                     <div>
-                        <p class="text-muted mb-1">Total Karyawan</p>
-                        <h2 class="mb-0">{{ $totalEmployees }}</h2>
-                        <small class="text-primary">Karyawan Aktif</small>
+                        <div class="fw-bold fs-5">Tren 6 bulan terakhir</div>
+                        <div class="small text-muted">Bandingkan kehadiran tepat waktu dan terlambat dari bulan ke bulan.</div>
                     </div>
-                    <i class="bi bi-people text-primary" style="font-size: 3rem;"></i>
+                    <select class="form-select" id="trendChartType" style="max-width: 140px;">
+                        <option value="bar">Bar</option>
+                        <option value="line">Line</option>
+                    </select>
+                </div>
+                <div class="card-body">
+                    <div class="chart-shell">
+                        <canvas id="trendChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card stat-card info">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1">Total Record Kehadiran</p>
-                        <h2 class="mb-0">{{ number_format($totalAttendance) }}</h2>
-                        <small class="text-info">Semua Waktu</small>
-                    </div>
-                    <i class="bi bi-calendar-check text-info" style="font-size: 3rem;"></i>
+        <div class="col-xl-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <div class="fw-bold fs-5">Distribusi status bulan ini</div>
                 </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Monthly Trend Chart -->
-<div class="card mb-4">
-    <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">
-            <i class="bi bi-graph-up-arrow me-2"></i>
-            Tren Kehadiran 6 Bulan Terakhir
-        </h5>
-    </div>
-    <div class="card-body">
-        <div id="monthlyTrendChart" style="height: 350px;"></div>
-    </div>
-</div>
-
-<div class="row g-3 mb-4">
-    <!-- Department Statistics -->
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header bg-success text-white">
-                <h5 class="mb-0">
-                    <i class="bi bi-building me-2"></i>
-                    Statistik Per Departemen
-                </h5>
-            </div>
-            <div class="card-body">
-                @if($departmentStats->count() > 0)
-                    <div id="departmentChart" style="height: 300px;"></div>
-                    
-                    <hr>
-                    
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Departemen</th>
-                                    <th class="text-end">Jumlah</th>
-                                    <th class="text-end">Persentase</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($departmentStats as $dept)
-                                <tr>
-                                    <td>{{ $dept->department ?? 'Tidak Ada Departemen' }}</td>
-                                    <td class="text-end"><strong>{{ $dept->count }}</strong></td>
-                                    <td class="text-end">
-                                        <span class="badge bg-success">
-                                            {{ number_format(($dept->count / $totalEmployees) * 100, 1) }}%
-                                        </span>
-                                    </td>
-                                </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+                <div class="card-body">
+                    <div class="chart-shell" style="min-height:280px;">
+                        <canvas id="statusChart"></canvas>
                     </div>
-                @else
-                    <div class="text-center py-4">
-                        <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
-                        <p class="text-muted mt-2">Belum ada data departemen</p>
-                    </div>
-                @endif
-            </div>
-        </div>
-    </div>
-
-    <!-- Attendance Status Distribution -->
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header bg-warning text-dark">
-                <h5 class="mb-0">
-                    <i class="bi bi-pie-chart me-2"></i>
-                    Distribusi Status Kehadiran (Bulan Ini)
-                </h5>
-            </div>
-            <div class="card-body">
-                <div id="statusPieChart" style="height: 300px;"></div>
-                
-                <hr>
-                
-                <div class="row text-center">
-                    <div class="col-6 mb-3">
-                        <div class="border rounded p-3">
-                            <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
-                            <h4 class="mb-0 mt-2">{{ $monthlyStats['on_time'] ?? 0 }}</h4>
-                            <small class="text-muted">Tepat Waktu</small>
+                    <div class="row g-2 mt-3">
+                        <div class="col-6">
+                            <div class="data-summary-item text-center">
+                                <div class="fw-bold text-success">{{ $monthlyStats['on_time'] ?? 0 }}</div>
+                                <div class="small text-muted">Tepat Waktu</div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="col-6 mb-3">
-                        <div class="border rounded p-3">
-                            <i class="bi bi-clock-history text-warning" style="font-size: 2rem;"></i>
-                            <h4 class="mb-0 mt-2">{{ $monthlyStats['late'] ?? 0 }}</h4>
-                            <small class="text-muted">Terlambat</small>
+                        <div class="col-6">
+                            <div class="data-summary-item text-center">
+                                <div class="fw-bold text-warning">{{ $monthlyStats['late'] ?? 0 }}</div>
+                                <div class="small text-muted">Terlambat</div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="border rounded p-3">
-                            <i class="bi bi-exclamation-circle text-info" style="font-size: 2rem;"></i>
-                            <h4 class="mb-0 mt-2">{{ $monthlyStats['incomplete'] ?? 0 }}</h4>
-                            <small class="text-muted">Belum Check-out</small>
+                        <div class="col-6">
+                            <div class="data-summary-item text-center">
+                                <div class="fw-bold" style="color:#8a7fc5;">{{ $monthlyStats['incomplete'] ?? 0 }}</div>
+                                <div class="small text-muted">Incomplete</div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="border rounded p-3">
-                            <i class="bi bi-x-circle text-danger" style="font-size: 2rem;"></i>
-                            <h4 class="mb-0 mt-2">{{ $monthlyStats['absent'] ?? 0 }}</h4>
-                            <small class="text-muted">Tidak Hadir</small>
+                        <div class="col-6">
+                            <div class="data-summary-item text-center">
+                                <div class="fw-bold text-danger">{{ $monthlyStats['absent'] ?? 0 }}</div>
+                                <div class="small text-muted">Tidak Hadir</div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Performance Summary -->
-<div class="card mb-4">
-    <div class="card-header bg-info text-white">
-        <h5 class="mb-0">
-            <i class="bi bi-trophy me-2"></i>
-            Ringkasan Performa Kehadiran
-        </h5>
-    </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-3 text-center mb-3">
-                <div class="border rounded p-4">
-                    @php
-                        $total = $monthlyStats['on_time'] + $monthlyStats['late'] + $monthlyStats['incomplete'];
-                        $onTimeRate = $total > 0 ? ($monthlyStats['on_time'] / $total) * 100 : 0;
-                    @endphp
-                    <div class="display-4 fw-bold text-success">
-                        {{ number_format($onTimeRate, 1) }}%
-                    </div>
-                    <h6 class="text-muted mb-0">Tingkat Kehadiran Tepat Waktu</h6>
-                    <small class="text-muted">Bulan Ini</small>
+    <div class="row g-4">
+        <div class="col-xl-6">
+            <div class="card">
+                <div class="card-header">
+                    <div class="fw-bold fs-5">Komposisi departemen</div>
                 </div>
-            </div>
-            <div class="col-md-3 text-center mb-3">
-                <div class="border rounded p-4">
-                    @php
-                        $lateRate = $total > 0 ? ($monthlyStats['late'] / $total) * 100 : 0;
-                    @endphp
-                    <div class="display-4 fw-bold text-warning">
-                        {{ number_format($lateRate, 1) }}%
-                    </div>
-                    <h6 class="text-muted mb-0">Tingkat Keterlambatan</h6>
-                    <small class="text-muted">Bulan Ini</small>
-                </div>
-            </div>
-            <div class="col-md-3 text-center mb-3">
-                <div class="border rounded p-4">
-                    <div class="display-4 fw-bold text-primary">
-                        {{ $monthlyStats['total_attendance'] ?? 0 }}
-                    </div>
-                    <h6 class="text-muted mb-0">Total Kehadiran</h6>
-                    <small class="text-muted">Bulan Ini</small>
-                </div>
-            </div>
-            <div class="col-md-3 text-center mb-3">
-                <div class="border rounded p-4">
-                    @php
-                        $avgAttendance = $totalEmployees > 0 ? ($monthlyStats['total_attendance'] / $totalEmployees) : 0;
-                    @endphp
-                    <div class="display-4 fw-bold text-info">
-                        {{ number_format($avgAttendance, 1) }}
-                    </div>
-                    <h6 class="text-muted mb-0">Rata-rata Kehadiran</h6>
-                    <small class="text-muted">Per Karyawan/Bulan</small>
+                <div class="card-body">
+                    @if($departmentStats->count())
+                        <div class="chart-shell" style="min-height:300px;">
+                            <canvas id="departmentChart"></canvas>
+                        </div>
+                    @else
+                        <div class="empty-state">
+                            <i class="bi bi-building"></i>
+                            <div class="fw-semibold mb-1">Belum ada data departemen</div>
+                        </div>
+                    @endif
                 </div>
             </div>
         </div>
-    </div>
-</div>
-
-<!-- Comparison Chart -->
-<div class="row g-3">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header bg-secondary text-white">
-                <h5 class="mb-0">
-                    <i class="bi bi-bar-chart-line me-2"></i>
-                    Perbandingan Tepat Waktu vs Terlambat (6 Bulan)
-                </h5>
-            </div>
-            <div class="card-body">
-                <div id="comparisonChart" style="height: 350px;"></div>
+        <div class="col-xl-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <div class="fw-bold fs-5">Ringkasan performa bulan ini</div>
+                </div>
+                <div class="card-body">
+                    <div class="data-summary">
+                        <div class="data-summary-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-semibold">Total kehadiran tercatat</div>
+                                <div class="small text-muted">Akumulasi semua status attendance bulan ini</div>
+                            </div>
+                            <div class="fw-bold fs-4">{{ $monthlyStats['total_attendance'] ?? 0 }}</div>
+                        </div>
+                        <div class="data-summary-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-semibold">Rata-rata per karyawan</div>
+                                <div class="small text-muted">Estimasi jumlah record attendance per karyawan aktif</div>
+                            </div>
+                            <div class="fw-bold fs-4">{{ number_format($totalEmployees > 0 ? (($monthlyStats['total_attendance'] ?? 0) / $totalEmployees) : 0, 1) }}</div>
+                        </div>
+                        <div class="data-summary-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-semibold">On-time vs Late</div>
+                                <div class="small text-muted">Proporsi utama kedisiplinan masuk kerja</div>
+                            </div>
+                            <div class="fw-bold fs-4">{{ ($monthlyStats['on_time'] ?? 0) }}/{{ ($monthlyStats['late'] ?? 0) }}</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -259,169 +156,89 @@
 
 @push('scripts')
 <script>
-    // Monthly Trend Chart
-    Highcharts.chart('monthlyTrendChart', {
-        chart: {
-            type: 'area'
-        },
-        title: {
-            text: null
-        },
-        xAxis: {
-            categories: @json($monthlyData['months'])
-        },
-        yAxis: {
-            title: {
-                text: 'Jumlah Kehadiran'
-            }
-        },
-        plotOptions: {
-            area: {
-                stacking: 'normal',
-                lineColor: '#666666',
-                lineWidth: 1,
-                marker: {
-                    lineWidth: 1,
-                    lineColor: '#666666'
-                }
-            }
-        },
-        series: [{
-            name: 'Tepat Waktu',
-            data: @json($monthlyData['onTime']),
-            color: '#198754'
-        }, {
-            name: 'Terlambat',
-            data: @json($monthlyData['late']),
-            color: '#ffc107'
-        }],
-        credits: {
-            enabled: false
-        }
-    });
+    document.addEventListener('DOMContentLoaded', function () {
+        const trendCanvas = document.getElementById('trendChart');
+        const statusCanvas = document.getElementById('statusChart');
+        const departmentCanvas = document.getElementById('departmentChart');
+        const trendTypeSelect = document.getElementById('trendChartType');
+        let trendChart;
 
-    // Department Chart
-    @if($departmentStats->count() > 0)
-    Highcharts.chart('departmentChart', {
-        chart: {
-            type: 'bar'
-        },
-        title: {
-            text: null
-        },
-        xAxis: {
-            categories: @json($departmentStats->pluck('department')->map(function($dept) {
-                return $dept ?? 'Tidak Ada Departemen';
-            }))
-        },
-        yAxis: {
-            title: {
-                text: 'Jumlah Karyawan'
-            }
-        },
-        series: [{
-            name: 'Jumlah Karyawan',
-            data: @json($departmentStats->pluck('count')),
-            colorByPoint: true
-        }],
-        legend: {
-            enabled: false
-        },
-        credits: {
-            enabled: false
-        }
-    });
-    @endif
-
-    // Status Pie Chart
-    @php
-        $totalMonthly = ($monthlyStats['on_time'] ?? 0) + ($monthlyStats['late'] ?? 0) + 
-                        ($monthlyStats['incomplete'] ?? 0) + ($monthlyStats['absent'] ?? 0);
-    @endphp
-    
-    Highcharts.chart('statusPieChart', {
-        chart: {
-            type: 'pie'
-        },
-        title: {
-            text: null
-        },
-        plotOptions: {
-            pie: {
-                allowPointSelect: true,
-                cursor: 'pointer',
-                dataLabels: {
-                    enabled: true,
-                    format: '<b>{point.name}</b>: {point.percentage:.1f}%'
+        function renderTrendChart() {
+            if (trendChart) trendChart.destroy();
+            trendChart = new Chart(trendCanvas, {
+                type: trendTypeSelect.value,
+                data: {
+                    labels: @json($monthlyData['months']),
+                    datasets: [
+                        {
+                            label: 'Tepat Waktu',
+                            data: @json($monthlyData['onTime']),
+                            borderColor: '#4f8a66',
+                            backgroundColor: 'rgba(79,138,102,.2)',
+                            tension: .35,
+                            borderWidth: 2
+                        },
+                        {
+                            label: 'Terlambat',
+                            data: @json($monthlyData['late']),
+                            borderColor: '#c88a4d',
+                            backgroundColor: 'rgba(200,138,77,.2)',
+                            tension: .35,
+                            borderWidth: 2
+                        }
+                    ]
                 },
-                showInLegend: true
-            }
-        },
-        series: [{
-            name: 'Jumlah',
-            colorByPoint: true,
-            data: [{
-                name: 'Tepat Waktu',
-                y: {{ $monthlyStats['on_time'] ?? 0 }},
-                color: '#198754'
-            }, {
-                name: 'Terlambat',
-                y: {{ $monthlyStats['late'] ?? 0 }},
-                color: '#ffc107'
-            }, {
-                name: 'Belum Check-out',
-                y: {{ $monthlyStats['incomplete'] ?? 0 }},
-                color: '#0dcaf0'
-            }, {
-                name: 'Tidak Hadir',
-                y: {{ $monthlyStats['absent'] ?? 0 }},
-                color: '#dc3545'
-            }]
-        }],
-        credits: {
-            enabled: false
-        }
-    });
-
-    // Comparison Chart
-    Highcharts.chart('comparisonChart', {
-        chart: {
-            type: 'column'
-        },
-        title: {
-            text: null
-        },
-        xAxis: {
-            categories: @json($monthlyData['months'])
-        },
-        yAxis: {
-            min: 0,
-            title: {
-                text: 'Jumlah Kehadiran'
-            }
-        },
-        tooltip: {
-            shared: true,
-            valueSuffix: ' kehadiran'
-        },
-        plotOptions: {
-            column: {
-                dataLabels: {
-                    enabled: true
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } },
+                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
                 }
+            });
+        }
+
+        trendTypeSelect.addEventListener('change', renderTrendChart);
+        renderTrendChart();
+
+        new Chart(statusCanvas, {
+            type: 'doughnut',
+            data: {
+                labels: ['Tepat Waktu', 'Terlambat', 'Incomplete', 'Tidak Hadir'],
+                datasets: [{
+                    data: [
+                        {{ $monthlyStats['on_time'] ?? 0 }},
+                        {{ $monthlyStats['late'] ?? 0 }},
+                        {{ $monthlyStats['incomplete'] ?? 0 }},
+                        {{ $monthlyStats['absent'] ?? 0 }}
+                    ],
+                    backgroundColor: ['#4f8a66', '#c88a4d', '#8a7fc5', '#ba5d57']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } }
             }
-        },
-        series: [{
-            name: 'Tepat Waktu',
-            data: @json($monthlyData['onTime']),
-            color: '#198754'
-        }, {
-            name: 'Terlambat',
-            data: @json($monthlyData['late']),
-            color: '#ffc107'
-        }],
-        credits: {
-            enabled: false
+        });
+
+        if (departmentCanvas) {
+            new Chart(departmentCanvas, {
+                type: 'bar',
+                data: {
+                    labels: @json($departmentStats->pluck('department')->map(fn ($department) => $department ?: 'Belum diatur')),
+                    datasets: [{
+                        label: 'Jumlah Karyawan',
+                        data: @json($departmentStats->pluck('count')),
+                        backgroundColor: ['#c97570', '#e0a19d', '#8a7fc5', '#4f8a66', '#c88a4d', '#ba5d57']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+                }
+            });
         }
     });
 </script>

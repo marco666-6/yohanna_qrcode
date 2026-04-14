@@ -160,29 +160,6 @@
                                     </button>
                                 </td>
                             </tr>
-
-                            <div class="modal fade" id="notesModal{{ $attendance->id }}" tabindex="-1">
-                                <div class="modal-dialog">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title">Tambah catatan kehadiran</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                        </div>
-                                        <form action="{{ route('hrd.attendance.notes', $attendance->id) }}" method="POST">
-                                            @csrf
-                                            <div class="modal-body">
-                                                <div class="small text-muted mb-3">{{ $attendance->user->name }} - {{ formatDate($attendance->date) }}</div>
-                                                <textarea class="form-control" name="notes" rows="4" required>{{ $attendance->notes }}</textarea>
-                                                <div class="small text-muted mt-2">Catatan akan dikirimkan sebagai notifikasi ke karyawan.</div>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal">Batal</button>
-                                                <button type="submit" class="btn btn-primary">Simpan Catatan</button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
                         @empty
                             <tr>
                                 <td colspan="9">
@@ -205,6 +182,33 @@
         @endif
     </div>
 </div>
+
+@foreach($attendances as $attendance)
+    <div class="modal fade" id="notesModal{{ $attendance->id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title mb-1">Tambah catatan kehadiran</h5>
+                        <div class="small text-muted">{{ $attendance->user->name }} · {{ formatDate($attendance->date) }}</div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="{{ route('hrd.attendance.notes', $attendance->id) }}" method="POST">
+                    @csrf
+                    <div class="modal-body">
+                        <textarea class="form-control" name="notes" rows="4" required>{{ $attendance->notes }}</textarea>
+                        <div class="small text-muted mt-2">Catatan akan dikirimkan sebagai notifikasi ke karyawan terkait.</div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-primary">Simpan Catatan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+@endforeach
 
 <div class="modal fade" id="exportModal" tabindex="-1">
     <div class="modal-dialog">
