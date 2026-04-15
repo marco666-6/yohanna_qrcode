@@ -190,7 +190,10 @@
     }
 
     function processQRCode(code) {
-        $.post('/attendance/scan', { code })
+        $.post('/attendance/scan', {
+            code,
+            _token: document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        })
             .done(response => {
                 Swal.fire({
                     icon: 'success',
@@ -199,7 +202,21 @@
                 }).then(loadTodayStatus);
             })
             .fail(xhr => {
-                Swal.fire({ icon: 'error', title: 'Scan gagal', text: xhr.responseJSON?.message || 'Terjadi kesalahan saat memproses QR.' });
+                if (xhr.status === 419) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Sesi halaman sudah tidak sinkron',
+                        text: 'Halaman scan sudah terlalu lama terbuka atau sesi login berubah. Muat ulang halaman lalu coba scan lagi.',
+                        confirmButtonText: 'Muat Ulang'
+                    }).then(() => window.location.reload());
+                    return;
+                }
+
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Scan gagal',
+                    text: xhr.responseJSON?.message || 'Terjadi kesalahan saat memproses QR.'
+                });
             });
     }
 
