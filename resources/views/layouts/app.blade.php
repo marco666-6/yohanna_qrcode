@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,11 +9,14 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+    <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 
@@ -23,7 +27,8 @@
         $isEmployee = $user?->isEmployee();
         $pageTitle = trim($__env->yieldContent('page-title', $__env->yieldContent('title', 'Dashboard')));
         $pageKicker = trim($__env->yieldContent('page-kicker', 'Attendance Operations'));
-        $pageSubtitle = trim($__env->yieldContent('page-subtitle', 'Pantau data, keputusan, dan aktivitas harian dari satu tampilan yang lebih rapi.'));
+        $pageSubtitle = trim($__env->yieldContent('page-subtitle', 'Pantau data, keputusan, dan aktivitas harian dari satu
+            tampilan yang lebih rapi.'));
 
         $navigation = match (true) {
             $isAdmin => [
@@ -33,8 +38,20 @@
                         ['label' => 'Dashboard', 'icon' => 'bi-speedometer2', 'route' => 'admin.dashboard', 'active' => 'admin.dashboard'],
                         ['label' => 'Data Karyawan', 'icon' => 'bi-people', 'route' => 'admin.employees', 'active' => 'admin.employees*'],
                         ['label' => 'Jadwal Shift', 'icon' => 'bi-clock-history', 'route' => 'admin.shifts', 'active' => 'admin.shifts*'],
-                        ['label' => 'Kehadiran', 'icon' => 'bi-calendar-check', 'route' => 'admin.attendances', 'active' => 'admin.attendances*'],
-                        ['label' => 'Pengajuan Cuti', 'icon' => 'bi-calendar2-week', 'route' => 'admin.leave-requests', 'active' => 'admin.leave-requests*'],
+                        [
+                            'label' => 'Kehadiran',
+                            'icon' => 'bi-calendar-check',
+                            'route' => 'admin.attendances',
+                            'active' =>
+                                'admin.attendances*'
+                        ],
+                        [
+                            'label' => 'Pengajuan Cuti',
+                            'icon' => 'bi-calendar2-week',
+                            'route' => 'admin.leave-requests',
+                            'active' =>
+                                'admin.leave-requests*'
+                        ],
                         ['label' => 'QR Shift', 'icon' => 'bi-qr-code', 'route' => 'admin.qr-code', 'active' => 'admin.qr-code*'],
                     ],
                 ],
@@ -44,8 +61,20 @@
                     'section' => 'Monitoring',
                     'items' => [
                         ['label' => 'Dashboard', 'icon' => 'bi-speedometer2', 'route' => 'hrd.dashboard', 'active' => 'hrd.dashboard'],
-                        ['label' => 'Laporan Kehadiran', 'icon' => 'bi-file-earmark-bar-graph', 'route' => 'hrd.attendance-report', 'active' => 'hrd.attendance-report*'],
-                        ['label' => 'Pengajuan Cuti', 'icon' => 'bi-calendar2-week', 'route' => 'hrd.leave-requests', 'active' => 'hrd.leave-requests*'],
+                        [
+                            'label' => 'Laporan Kehadiran',
+                            'icon' => 'bi-file-earmark-bar-graph',
+                            'route' => 'hrd.attendance-report',
+                            'active'
+                            => 'hrd.attendance-report*'
+                        ],
+                        [
+                            'label' => 'Pengajuan Cuti',
+                            'icon' => 'bi-calendar2-week',
+                            'route' => 'hrd.leave-requests',
+                            'active' =>
+                                'hrd.leave-requests*'
+                        ],
                         ['label' => 'Statistik', 'icon' => 'bi-graph-up-arrow', 'route' => 'hrd.statistics', 'active' => 'hrd.statistics*'],
                     ],
                 ],
@@ -54,11 +83,41 @@
                 [
                     'section' => 'My Workspace',
                     'items' => [
-                        ['label' => 'Dashboard', 'icon' => 'bi-speedometer2', 'route' => 'employee.dashboard', 'active' => 'employee.dashboard'],
-                        ['label' => 'Scan Absensi', 'icon' => 'bi-qr-code-scan', 'route' => 'employee.scanner', 'active' => 'employee.scanner'],
-                        ['label' => 'Riwayat Absensi', 'icon' => 'bi-clock-history', 'route' => 'employee.attendance-history', 'active' => 'employee.attendance-history*'],
-                        ['label' => 'Pengajuan Cuti', 'icon' => 'bi-calendar-event', 'route' => 'employee.leave-requests', 'active' => 'employee.leave-requests*'],
-                        ['label' => 'Notifikasi', 'icon' => 'bi-bell', 'route' => 'employee.notifications', 'active' => 'employee.notifications*'],
+                        [
+                            'label' => 'Dashboard',
+                            'icon' => 'bi-speedometer2',
+                            'route' => 'employee.dashboard',
+                            'active' =>
+                                'employee.dashboard'
+                        ],
+                        [
+                            'label' => 'Scan Absensi',
+                            'icon' => 'bi-qr-code-scan',
+                            'route' => 'employee.scanner',
+                            'active' =>
+                                'employee.scanner'
+                        ],
+                        [
+                            'label' => 'Riwayat Absensi',
+                            'icon' => 'bi-clock-history',
+                            'route' => 'employee.attendance-history',
+                            'active' =>
+                                'employee.attendance-history*'
+                        ],
+                        [
+                            'label' => 'Pengajuan Cuti',
+                            'icon' => 'bi-calendar-event',
+                            'route' => 'employee.leave-requests',
+                            'active' =>
+                                'employee.leave-requests*'
+                        ],
+                        [
+                            'label' => 'Notifikasi',
+                            'icon' => 'bi-bell',
+                            'route' => 'employee.notifications',
+                            'active' =>
+                                'employee.notifications*'
+                        ],
                         ['label' => 'Profil', 'icon' => 'bi-person-badge', 'route' => 'employee.profile', 'active' => 'employee.profile*'],
                     ],
                 ],
@@ -92,7 +151,9 @@
             --radius-md: 18px;
         }
 
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+        }
 
         body {
             margin: 0;
@@ -105,7 +166,9 @@
                 linear-gradient(180deg, #fbf6f4 0%, #f6eeeb 100%);
         }
 
-        a { text-decoration: none; }
+        a {
+            text-decoration: none;
+        }
 
         #sidebar {
             width: var(--sidebar-width);
@@ -123,8 +186,8 @@
         .sidebar-shell {
             height: 100%;
             border-radius: 30px;
-            background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04));
-            border: 1px solid rgba(255,255,255,0.12);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+            border: 1px solid rgba(255, 255, 255, 0.12);
             backdrop-filter: blur(14px);
             overflow: hidden;
             display: flex;
@@ -133,7 +196,7 @@
 
         .sidebar-brand {
             padding: 1.35rem 1.35rem 1rem;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .sidebar-brand-badge {
@@ -143,8 +206,8 @@
             display: grid;
             place-items: center;
             color: #fff7f5;
-            background: rgba(255,255,255,0.14);
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+            background: rgba(255, 255, 255, 0.14);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
             font-size: 1.35rem;
         }
 
@@ -192,24 +255,24 @@
             display: grid;
             place-items: center;
             border-radius: 14px;
-            background: rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.1);
             font-size: 1.1rem;
         }
 
         .sidebar-link:hover,
         .sidebar-link.active {
             color: #fff;
-            background: rgba(255,255,255,0.14);
+            background: rgba(255, 255, 255, 0.14);
             transform: translateX(4px);
         }
 
         .sidebar-link:hover i,
         .sidebar-link.active i {
-            background: rgba(255,255,255,0.19);
+            background: rgba(255, 255, 255, 0.19);
         }
 
         .sidebar-footer {
-            border-top: 1px solid rgba(255,255,255,0.1);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
             padding: 1rem 1.15rem 1.2rem;
         }
 
@@ -228,7 +291,7 @@
             place-items: center;
             color: #fff;
             font-weight: 800;
-            background: rgba(255,255,255,0.14);
+            background: rgba(255, 255, 255, 0.14);
         }
 
         #main-content {
@@ -254,7 +317,7 @@
             padding: 1rem 1.15rem;
             border-radius: var(--radius-xl);
             border: 1px solid rgba(201, 117, 112, 0.12);
-            background: rgba(255,255,255,0.8);
+            background: rgba(255, 255, 255, 0.8);
             backdrop-filter: blur(12px);
             box-shadow: var(--shadow-md);
         }
@@ -302,7 +365,9 @@
             padding: 1.15rem 1.3rem;
         }
 
-        .card-body { padding: 1.3rem; }
+        .card-body {
+            padding: 1.3rem;
+        }
 
         .hero-panel {
             padding: 1.45rem;
@@ -315,22 +380,23 @@
         .hero-panel::after {
             content: '';
             position: absolute;
+            pointer-events: none;
             width: 280px;
             height: 280px;
             right: -90px;
             bottom: -120px;
-            background: radial-gradient(circle, rgba(255,255,255,0.18), transparent 70%);
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.18), transparent 70%);
         }
 
         .hero-panel .muted {
-            color: rgba(255,248,247,0.8);
+            color: rgba(255, 248, 247, 0.8);
         }
 
         .stat-card {
             height: 100%;
             border-radius: 24px;
             padding: 1.15rem;
-            background: rgba(255,255,255,0.94);
+            background: rgba(255, 255, 255, 0.94);
             border: 1px solid var(--border-soft);
             box-shadow: 0 16px 30px rgba(87, 52, 57, 0.06);
             position: relative;
@@ -345,10 +411,21 @@
             background: linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%);
         }
 
-        .stat-card.success::before { background: linear-gradient(90deg, #4f8a66 0%, #7ab18b 100%); }
-        .stat-card.warning::before { background: linear-gradient(90deg, #c88a4d 0%, #dfb37a 100%); }
-        .stat-card.danger::before { background: linear-gradient(90deg, #ba5d57 0%, #d98b85 100%); }
-        .stat-card.info::before { background: linear-gradient(90deg, #8a7fc5 0%, #b7a8df 100%); }
+        .stat-card.success::before {
+            background: linear-gradient(90deg, #4f8a66 0%, #7ab18b 100%);
+        }
+
+        .stat-card.warning::before {
+            background: linear-gradient(90deg, #c88a4d 0%, #dfb37a 100%);
+        }
+
+        .stat-card.danger::before {
+            background: linear-gradient(90deg, #ba5d57 0%, #d98b85 100%);
+        }
+
+        .stat-card.info::before {
+            background: linear-gradient(90deg, #8a7fc5 0%, #b7a8df 100%);
+        }
 
         .stat-icon {
             width: 52px;
@@ -389,7 +466,7 @@
             padding: 1rem;
             border-radius: 18px;
             border: 1px solid rgba(129, 101, 104, 0.1);
-            background: rgba(255,255,255,0.72);
+            background: rgba(255, 255, 255, 0.72);
             color: inherit;
             transition: all 0.22s ease;
         }
@@ -460,7 +537,7 @@
         .btn-outline-primary {
             border: 1px solid rgba(201, 117, 112, 0.28);
             color: var(--primary-dark);
-            background: rgba(255,255,255,0.72);
+            background: rgba(255, 255, 255, 0.72);
         }
 
         .btn-outline-primary:hover {
@@ -476,7 +553,7 @@
             border-bottom-width: 1px;
         }
 
-        .table > :not(caption) > * > * {
+        .table> :not(caption)>*>* {
             background: transparent;
             padding-top: 0.95rem;
             padding-bottom: 0.95rem;
@@ -493,11 +570,30 @@
             padding: 0.55rem 0.8rem;
         }
 
-        .badge-soft-primary { background: rgba(201,117,112,.14); color: #8b5557; }
-        .badge-soft-success { background: rgba(79,138,102,.14); color: #38694a; }
-        .badge-soft-warning { background: rgba(200,138,77,.14); color: #9a6731; }
-        .badge-soft-info { background: rgba(138,127,197,.14); color: #6358a0; }
-        .badge-soft-danger { background: rgba(186,93,87,.14); color: #984b46; }
+        .badge-soft-primary {
+            background: rgba(201, 117, 112, .14);
+            color: #8b5557;
+        }
+
+        .badge-soft-success {
+            background: rgba(79, 138, 102, .14);
+            color: #38694a;
+        }
+
+        .badge-soft-warning {
+            background: rgba(200, 138, 77, .14);
+            color: #9a6731;
+        }
+
+        .badge-soft-info {
+            background: rgba(138, 127, 197, .14);
+            color: #6358a0;
+        }
+
+        .badge-soft-danger {
+            background: rgba(186, 93, 87, .14);
+            color: #984b46;
+        }
 
         .alert {
             border: none;
@@ -523,7 +619,7 @@
         .data-summary-item {
             border-radius: 18px;
             padding: 1rem;
-            background: linear-gradient(180deg, rgba(255,255,255,0.8), rgba(250,244,242,0.9));
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(250, 244, 242, 0.9));
             border: 1px solid rgba(129, 101, 104, 0.1);
         }
 
@@ -570,13 +666,15 @@
 
     @stack('styles')
 </head>
+
 <body>
     <nav id="sidebar">
         <div class="sidebar-shell">
             <div class="sidebar-brand">
                 <div class="d-flex align-items-center gap-3">
                     <div class="sidebar-brand-badge">
-                        <i class="bi {{ $isAdmin ? 'bi-grid-1x2-fill' : ($isHrd ? 'bi-clipboard-data-fill' : 'bi-qr-code-scan') }}"></i>
+                        <i
+                            class="bi {{ $isAdmin ? 'bi-grid-1x2-fill' : ($isHrd ? 'bi-clipboard-data-fill' : 'bi-qr-code-scan') }}"></i>
                     </div>
                     <div>
                         <h5>{{ $isAdmin ? 'Admin Center' : ($isHrd ? 'HRD Insight Hub' : 'Attendance Desk') }}</h5>
@@ -589,7 +687,8 @@
                 @foreach($navigation as $group)
                     <div class="nav-section">{{ $group['section'] }}</div>
                     @foreach($group['items'] as $item)
-                        <a href="{{ route($item['route']) }}" class="sidebar-link {{ request()->routeIs($item['active']) ? 'active' : '' }}">
+                        <a href="{{ route($item['route']) }}"
+                            class="sidebar-link {{ request()->routeIs($item['active']) ? 'active' : '' }}">
                             <i class="bi {{ $item['icon'] }}"></i>
                             <span>{{ $item['label'] }}</span>
                         </a>
@@ -617,7 +716,8 @@
                     @endif
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
-                        <button class="btn btn-sm w-100 text-white" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);">
+                        <button class="btn btn-sm w-100 text-white"
+                            style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);">
                             <i class="bi bi-box-arrow-left me-1"></i>Logout
                         </button>
                     </form>
@@ -631,7 +731,8 @@
             <div class="topbar-inner">
                 <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
                     <div class="d-flex align-items-start gap-3">
-                        <button class="btn btn-outline-secondary d-lg-none" type="button" onclick="document.getElementById('sidebar').classList.toggle('open')">
+                        <button class="btn btn-outline-secondary d-lg-none" type="button"
+                            onclick="document.getElementById('sidebar').classList.toggle('open')">
                             <i class="bi bi-list"></i>
                         </button>
                         <div>
@@ -645,7 +746,8 @@
                             <i class="bi bi-calendar3"></i>{{ now()->translatedFormat('d M Y') }}
                         </span>
                         <span class="soft-chip">
-                            <i class="bi bi-clock-history"></i><span id="layoutCurrentTime">{{ now()->format('H:i') }}</span>
+                            <i class="bi bi-clock-history"></i><span
+                                id="layoutCurrentTime">{{ now()->format('H:i') }}</span>
                         </span>
                         <span class="soft-chip">
                             <i class="bi bi-person-circle"></i>{{ getRoleText($user->role) }}
@@ -670,7 +772,8 @@
 
             @if($errors->any())
                 <div class="alert alert-danger mb-4">
-                    <div class="fw-semibold mb-1"><i class="bi bi-exclamation-octagon me-2"></i>Terdapat kesalahan input</div>
+                    <div class="fw-semibold mb-1"><i class="bi bi-exclamation-octagon me-2"></i>Terdapat kesalahan input
+                    </div>
                     <ul class="mb-0 ps-3">
                         @foreach($errors->all() as $error)
                             <li>{{ $error }}</li>
@@ -693,11 +796,14 @@
 
     <script>
         $(document).ready(function () {
-            $('.select2').select2({ theme: 'bootstrap-5' });
+            $('.select2').select2({
+                theme: 'bootstrap-5'
+            });
 
             $.ajaxSetup({
                 headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute(
+                        'content')
                 }
             });
         });
@@ -735,4 +841,5 @@
 
     @stack('scripts')
 </body>
+
 </html>
