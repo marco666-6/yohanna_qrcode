@@ -91,7 +91,7 @@
                                 'employee.dashboard'
                         ],
                         [
-                            'label' => 'Scan Absensi',
+                            'label' => 'Absensi Saya',
                             'icon' => 'bi-qr-code-scan',
                             'route' => 'employee.scanner',
                             'active' =>

@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\QrCode;
 use App\Models\ActivityLog;
 use App\Models\Notification;
+use App\Services\EmployeeAttendanceService;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Mail;
@@ -16,9 +17,12 @@ class AttendanceController extends Controller
     /**
      * Show scanning page for employee
      */
-    public function showScanner()
+    public function showScanner(EmployeeAttendanceService $employeeAttendanceService)
     {
-        return view('employee.scanner');
+        $attendanceContext = $employeeAttendanceService->buildContext(auth()->user());
+        $attendanceContextPayload = $employeeAttendanceService->serializeContext($attendanceContext);
+
+        return view('employee.scanner', compact('attendanceContext', 'attendanceContextPayload'));
     }
 
     /**
@@ -176,6 +180,7 @@ class AttendanceController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Check-out berhasil',
+            'status' => $attendance->status,
             'check_out_time' => $checkOutTime->format('H:i:s'),
             'total_hours' => $attendance->total_hours,
             'attendance' => $attendance,
@@ -205,25 +210,16 @@ class AttendanceController extends Controller
     /**
      * Get today's attendance status
      */
-    public function todayStatus()
+    public function todayStatus(EmployeeAttendanceService $employeeAttendanceService)
     {
         $user = auth()->user();
-        $today = now()->format('Y-m-d');
-        
-        $attendance = Attendance::where('user_id', $user->id)
-            ->where('date', $today)
-            ->with('shift')
-            ->first();
-
-        if (!$attendance) {
-            $attendance = Attendance::openForCheckout($user->id)
-                ->with('shift')
-                ->first();
-        }
+        $context = $employeeAttendanceService->buildContext($user);
+        $attendance = $context['attendance'];
 
         return response()->json([
             'success' => true,
             'attendance' => $attendance,
+            'context' => $employeeAttendanceService->serializeContext($context),
         ]);
     }
 

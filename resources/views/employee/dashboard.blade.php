@@ -3,18 +3,22 @@
 @section('title', 'Dashboard Karyawan')
 @section('page-kicker', 'My Attendance')
 @section('page-title', 'Dashboard Karyawan')
-@section('page-subtitle', 'Lihat status absensi hari ini, performa bulanan, notifikasi penting, dan akses cepat ke alur utama.')
+@section('page-subtitle', 'Lihat status absensi hari ini, QR otomatis sesuai shift, performa bulanan, dan pengingat penting dari satu tempat.')
 
 @section('content')
+@php
+    $attendanceNotice = $attendanceContext['notice'];
+    $attendanceWindow = $attendanceContext['window'];
+@endphp
 <div class="d-grid gap-4">
     <div class="hero-panel">
         <div class="row g-4 align-items-center position-relative">
             <div class="col-xl-8">
                 <div class="small text-uppercase fw-bold muted" style="letter-spacing:.2em;">Daily Attendance</div>
                 <h2 class="mt-2 mb-2 fw-bold">
-                    {{ $todayAttendance?->check_out ? 'Absensi hari ini sudah lengkap.' : ($todayAttendance?->check_in ? 'Jangan lupa check-out sebelum pulang.' : 'Anda belum melakukan absensi hari ini.') }}
+                    {{ $attendanceNotice['title'] }}
                 </h2>
-                <p class="muted mb-4">Dashboard ini mengikuti alur proposal: scan QR untuk check-in/check-out, lihat histori pribadi, dan pantau pengajuan cuti tanpa kebingungan.</p>
+                <p class="muted mb-4">{{ $attendanceNotice['message'] }} QR absensi akan dimunculkan otomatis di menu absensi Anda saat window shift terbuka.</p>
                 <div class="d-flex flex-wrap gap-2">
                     <span class="badge rounded-pill text-bg-light px-3 py-2">{{ auth()->user()->employee_id }}</span>
                     <span class="badge rounded-pill text-bg-light px-3 py-2">{{ auth()->user()->shift?->name ?: 'Shift belum diatur' }}</span>
@@ -30,6 +34,30 @@
                         Check-out {{ $todayAttendance?->check_out ? formatTime($todayAttendance->check_out) : '-' }}
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert alert-{{ $attendanceNotice['variant'] }} mb-0">
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+            <div>
+                <div class="fw-bold">{{ $attendanceNotice['title'] }}</div>
+                <div class="small">
+                    {{ $attendanceNotice['message'] }}
+                    @if($attendanceWindow)
+                        Window {{ strtolower($attendanceContext['next_action_label']) }}: {{ $attendanceWindow['start']->format('H:i') }} - {{ $attendanceWindow['end']->format('H:i') }}.
+                    @endif
+                </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                @if($attendanceContext['shift'])
+                    <span class="soft-chip">
+                        <i class="bi bi-clock"></i>{{ formatTime($attendanceContext['shift']->start_time) }} - {{ formatTime($attendanceContext['shift']->end_time) }}
+                    </span>
+                @endif
+                <a href="{{ route('employee.scanner') }}" class="btn btn-sm btn-light">
+                    <i class="bi bi-qr-code me-1"></i>{{ $attendanceContext['active_qr'] ? $attendanceContext['action_button_label'] : 'Buka Absensi Saya' }}
+                </a>
             </div>
         </div>
     </div>
@@ -87,7 +115,7 @@
                 </div>
                 <div class="card-body d-flex flex-column gap-3">
                     @foreach([
-                        ['label' => 'Scan Absensi', 'route' => route('employee.scanner'), 'icon' => 'bi-qr-code-scan', 'tone' => 'primary'],
+                        ['label' => 'Absensi & QR Saya', 'route' => route('employee.scanner'), 'icon' => 'bi-qr-code-scan', 'tone' => 'primary'],
                         ['label' => 'Ajukan Cuti', 'route' => route('employee.leave-requests.create'), 'icon' => 'bi-calendar-plus', 'tone' => 'warning'],
                         ['label' => 'Riwayat Absensi', 'route' => route('employee.attendance-history'), 'icon' => 'bi-clock-history', 'tone' => 'success'],
                         ['label' => 'Notifikasi', 'route' => route('employee.notifications'), 'icon' => 'bi-bell', 'tone' => 'info'],

@@ -18,7 +18,7 @@
 
                     <div class="d-grid gap-2 mt-4">
                         <a href="{{ route('change-password') }}" class="btn btn-primary">Ubah Password</a>
-                        <a href="{{ route('employee.scanner') }}" class="btn btn-outline-primary">Scan Absensi</a>
+                        <a href="{{ route('employee.scanner') }}" class="btn btn-outline-primary">Absensi Saya</a>
                     </div>
                 </div>
             </div>

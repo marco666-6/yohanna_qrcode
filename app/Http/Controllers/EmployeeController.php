@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Attendance;
 use App\Models\LeaveRequest;
 use App\Models\Notification;
+use App\Services\EmployeeAttendanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use App\Models\ActivityLog;
@@ -21,22 +22,11 @@ class EmployeeController extends Controller
     /**
      * Employee Dashboard
      */
-    public function dashboard()
+    public function dashboard(EmployeeAttendanceService $employeeAttendanceService)
     {
         $user = auth()->user();
-        $today = now()->toDateString();
-        
-        // Today's attendance
-        $todayAttendance = Attendance::where('user_id', $user->id)
-            ->where('date', $today)
-            ->with('shift')
-            ->first();
-
-        if (!$todayAttendance) {
-            $todayAttendance = Attendance::openForCheckout($user->id)
-                ->with('shift')
-                ->first();
-        }
+        $attendanceContext = $employeeAttendanceService->buildContext($user);
+        $todayAttendance = $attendanceContext['attendance'];
 
         // Monthly statistics
         $monthStart = now()->startOfMonth()->toDateString();
@@ -109,16 +99,20 @@ class EmployeeController extends Controller
             'upcomingLeaves',
             'trendLabels',
             'trendPresent',
-            'trendHours'
+            'trendHours',
+            'attendanceContext'
         ));
     }
 
     /**
      * Scanner Page
      */
-    public function scanner()
+    public function scanner(EmployeeAttendanceService $employeeAttendanceService)
     {
-        return view('employee.scanner');
+        $attendanceContext = $employeeAttendanceService->buildContext(auth()->user());
+        $attendanceContextPayload = $employeeAttendanceService->serializeContext($attendanceContext);
+
+        return view('employee.scanner', compact('attendanceContext', 'attendanceContextPayload'));
     }
 
     /**
