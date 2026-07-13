@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\QrCode;
 use App\Models\ActivityLog;
 use App\Models\Notification;
+use App\Services\AttendanceLocationService;
 use App\Services\EmployeeAttendanceService;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
@@ -28,10 +29,13 @@ class AttendanceController extends Controller
     /**
      * Process QR code scan
      */
-    public function scan(Request $request)
+    public function scan(Request $request, AttendanceLocationService $attendanceLocationService)
     {
         $request->validate([
             'code' => 'required|string',
+            'location_latitude' => 'nullable|numeric|between:-90,90',
+            'location_longitude' => 'nullable|numeric|between:-180,180',
+            'location_accuracy' => 'nullable|numeric|min:0',
         ]);
 
         $user = auth()->user();
@@ -70,23 +74,33 @@ class AttendanceController extends Controller
             ], 400);
         }
 
+        $locationValidation = $attendanceLocationService->validateScanLocation($request);
+        if (!$locationValidation['valid']) {
+            return response()->json([
+                'success' => false,
+                'message' => $locationValidation['message'],
+                'distance_meters' => $locationValidation['distance_meters'],
+                'accuracy_meters' => $locationValidation['accuracy_meters'],
+            ], 400);
+        }
+
         $today = now()->format('Y-m-d');
 
         if ($qrCode->type === 'check_in') {
             $attendance = Attendance::where('user_id', $user->id)
                 ->where('date', $today)
                 ->first();
-            return $this->processCheckIn($user, $qrCode, $attendance);
+            return $this->processCheckIn($user, $qrCode, $attendance, $locationValidation);
         } else {
             $attendance = Attendance::openForCheckout($user->id, $qrCode->shift_id)->first();
-            return $this->processCheckOut($user, $qrCode, $attendance);
+            return $this->processCheckOut($user, $qrCode, $attendance, $locationValidation);
         }
     }
 
     /**
      * Process check-in
      */
-    private function processCheckIn($user, $qrCode, $attendance)
+    private function processCheckIn($user, $qrCode, $attendance, array $locationValidation)
     {
         if ($attendance && $attendance->check_in) {
             return response()->json([
@@ -123,7 +137,10 @@ class AttendanceController extends Controller
         }
 
         // Log activity
-        ActivityLog::log('CHECK_IN', "Check-in successful at {$checkInTime->format('H:i:s')}");
+        $locationLog = $locationValidation['distance_meters'] !== null
+            ? " within {$locationValidation['distance_meters']}m from configured location"
+            : '';
+        ActivityLog::log('CHECK_IN', "Check-in successful at {$checkInTime->format('H:i:s')}{$locationLog}");
 
         // Send notification
         $this->sendNotification($user, 'check_in', $status);
@@ -133,6 +150,8 @@ class AttendanceController extends Controller
             'message' => 'Check-in berhasil',
             'status' => $status,
             'check_in_time' => $checkInTime->format('H:i:s'),
+            'distance_meters' => $locationValidation['distance_meters'],
+            'accuracy_meters' => $locationValidation['accuracy_meters'],
             'attendance' => $attendance,
         ]);
     }
@@ -140,7 +159,7 @@ class AttendanceController extends Controller
     /**
      * Process check-out
      */
-    private function processCheckOut($user, $qrCode, $attendance)
+    private function processCheckOut($user, $qrCode, $attendance, array $locationValidation)
     {
         if (!$attendance || !$attendance->check_in) {
             return response()->json([
@@ -172,7 +191,10 @@ class AttendanceController extends Controller
         $attendance->updateStatus();
 
         // Log activity
-        ActivityLog::log('CHECK_OUT', "Check-out successful at {$checkOutTime->format('H:i:s')}");
+        $locationLog = $locationValidation['distance_meters'] !== null
+            ? " within {$locationValidation['distance_meters']}m from configured location"
+            : '';
+        ActivityLog::log('CHECK_OUT', "Check-out successful at {$checkOutTime->format('H:i:s')}{$locationLog}");
 
         // Send notification
         $this->sendNotification($user, 'check_out', $attendance->status);
@@ -183,6 +205,8 @@ class AttendanceController extends Controller
             'status' => $attendance->status,
             'check_out_time' => $checkOutTime->format('H:i:s'),
             'total_hours' => $attendance->total_hours,
+            'distance_meters' => $locationValidation['distance_meters'],
+            'accuracy_meters' => $locationValidation['accuracy_meters'],
             'attendance' => $attendance,
         ]);
     }

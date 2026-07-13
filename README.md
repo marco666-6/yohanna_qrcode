@@ -131,6 +131,13 @@ QR_CODE_BEFORE_MINUTES=30
 QR_CODE_AFTER_MINUTES=45
 DEFAULT_LATE_TOLERANCE=15
 WORKING_HOURS_MINIMUM=8
+
+ATTENDANCE_LOCATION_ENABLED=false
+ATTENDANCE_LOCATION_LATITUDE=
+ATTENDANCE_LOCATION_LONGITUDE=
+ATTENDANCE_LOCATION_RADIUS_METERS=100
+ATTENDANCE_LOCATION_MAX_ACCURACY_METERS=150
+ATTENDANCE_LOCATION_LABEL="Lokasi kantor"
 ```
 
 Buat database MySQL terlebih dahulu:
@@ -359,6 +366,19 @@ Artinya:
 - QR dibedakan menjadi `check_in` dan `check_out`
 - karyawan tetap diidentifikasi dari akun login
 - QR berfungsi sebagai token absensi sementara untuk shift terkait
+- proses absensi dapat dikunci ke radius lokasi kantor melalui validasi geolocation
+
+### 2.2.1. Validasi lokasi absensi
+
+Untuk menjawab revisi sidang tentang potensi QR dipakai dari rumah atau lokasi lain, sistem sekarang mendukung location guard.
+
+Saat employee melakukan check-in/check-out, browser mengirim koordinat perangkat ke server. Server menghitung jarak koordinat tersebut dari titik absensi yang dikonfigurasi di `.env`. Jika perangkat berada di luar radius yang diizinkan, absensi ditolak walaupun QR masih aktif dan sesuai shift.
+
+Dokumentasi detail revisi ini ada di:
+
+```text
+docs/REVISION_LOCATION_QR_ATTENDANCE.md
+```
 
 ### 2.3. Workflow check-in
 
@@ -372,6 +392,7 @@ Artinya:
    - QR belum expired
    - QR cocok dengan shift employee
    - QR masih dalam attendance window
+   - lokasi perangkat berada dalam radius absensi yang diizinkan
 6. Sistem menyimpan `check_in`
 7. Sistem menentukan status `on_time` atau `late`
 8. Sistem membuat activity log
@@ -384,10 +405,11 @@ Artinya:
 3. Employee scan QR check-out
 4. Sistem mencari attendance yang masih terbuka
 5. Sistem memastikan employee sudah check-in
-6. Sistem menyimpan `check_out`
-7. Sistem menghitung `total_hours`
-8. Sistem memperbarui status attendance
-9. Sistem membuat log dan notifikasi
+6. Sistem memastikan lokasi perangkat berada dalam radius absensi yang diizinkan
+7. Sistem menyimpan `check_out`
+8. Sistem menghitung `total_hours`
+9. Sistem memperbarui status attendance
+10. Sistem membuat log dan notifikasi
 
 ### 2.5. Workflow admin
 

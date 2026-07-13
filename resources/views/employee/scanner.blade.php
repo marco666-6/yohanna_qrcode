@@ -3,7 +3,7 @@
 @section('title', 'Absensi Saya')
 @section('page-kicker', 'My Attendance QR')
 @section('page-title', 'Absensi Saya')
-@section('page-subtitle', 'QR absensi muncul otomatis sesuai shift Anda, lengkap dengan status check-in/check-out dan fallback scanner bila diperlukan.')
+@section('page-subtitle', 'QR absensi muncul otomatis sesuai shift Anda, dengan validasi lokasi agar check-in/check-out hanya bisa dari area yang diizinkan.')
 
 @section('content')
 <div class="row g-4">
@@ -12,7 +12,7 @@
             <div class="card-header d-flex justify-content-between align-items-center gap-3">
                 <div>
                     <div class="fw-bold fs-5">QR absensi aktif</div>
-                    <div class="small text-muted">Tidak perlu minta QR ke admin. Saat window shift terbuka, QR aktif akan muncul otomatis di sini.</div>
+                    <div class="small text-muted">Saat window shift terbuka, QR aktif muncul otomatis dan tetap harus melewati validasi lokasi.</div>
                 </div>
                 <span class="soft-chip"><i class="bi bi-clock-history"></i><span id="currentTime">{{ now()->format('H:i:s') }}</span></span>
             </div>
@@ -36,6 +36,13 @@
                 <div class="fw-bold fs-5">Shift & window</div>
             </div>
             <div class="card-body" id="windowContent"></div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <div class="fw-bold fs-5">Validasi lokasi</div>
+            </div>
+            <div class="card-body" id="locationContent"></div>
         </div>
     </div>
 </div>
@@ -89,7 +96,8 @@
                 <ol class="small text-muted mb-0 ps-3">
                     <li>Jika QR aktif sudah muncul, gunakan tombol check-in/check-out langsung dari halaman ini.</li>
                     <li>QR akan mengikuti shift Anda dan diperbarui otomatis selama window absensi masih terbuka.</li>
-                    <li>Bila perlu, Anda tetap bisa scan QR dari perangkat lain atau pakai input manual sebagai cadangan.</li>
+                    <li>Saat submit, browser akan meminta izin lokasi untuk memastikan perangkat berada di area kantor.</li>
+                    <li>Bila perlu, Anda tetap bisa scan QR dari perangkat lain atau pakai input manual sebagai cadangan, tetapi validasi lokasi tetap berlaku.</li>
                     <li>Perhatikan panel status untuk tahu apakah jam check-in atau check-out sudah dibuka.</li>
                 </ol>
             </div>
@@ -170,6 +178,7 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
     const initialAttendanceContext = @json($attendanceContextPayload);
+    const attendanceLocationConfig = @json(config('attendance.location'));
     let attendanceContext = initialAttendanceContext;
     let html5QrCode;
     let isScanning = false;
@@ -196,6 +205,33 @@
             incomplete: 'Belum Check-out',
             absent: 'Tidak Hadir'
         }[status] || 'Tidak diketahui';
+    }
+
+    function formatDistance(meters) {
+        const value = Number(meters);
+        if (!Number.isFinite(value)) {
+            return null;
+        }
+
+        return value >= 1000
+            ? `${(value / 1000).toFixed(2)} km`
+            : `${value.toFixed(2)} meter`;
+    }
+
+    function buildLocationResultHtml(payload) {
+        const distance = formatDistance(payload?.distance_meters);
+        const accuracy = formatDistance(payload?.accuracy_meters);
+        const lines = [];
+
+        if (distance) {
+            lines.push(`Jarak dari lokasi absen: <strong>${distance}</strong>`);
+        }
+
+        if (accuracy) {
+            lines.push(`Akurasi lokasi perangkat: <strong>${accuracy}</strong>`);
+        }
+
+        return lines.length ? `<br>${lines.join('<br>')}` : '';
     }
 
     function renderNotice(context) {
@@ -278,6 +314,32 @@
                 <div class="small text-muted mt-1">${escapeHtml(context.shift.start_time)} - ${escapeHtml(context.shift.end_time)}</div>
             </div>
             ${windowHtml}
+        `;
+    }
+
+    function renderLocationStatus() {
+        const enabled = Boolean(attendanceLocationConfig.enabled);
+        const label = attendanceLocationConfig.label || 'Lokasi kantor';
+
+        document.getElementById('locationContent').innerHTML = enabled ? `
+            <div class="data-summary-item mb-3">
+                <div class="small text-muted">Status</div>
+                <div class="fw-semibold text-success">Aktif</div>
+            </div>
+            <div class="data-summary-item mb-3">
+                <div class="small text-muted">Titik absensi</div>
+                <div class="fw-semibold">${escapeHtml(label)}</div>
+            </div>
+            <div class="data-summary-item">
+                <div class="small text-muted">Radius diizinkan</div>
+                <div class="fw-semibold">${escapeHtml(attendanceLocationConfig.radius_meters)} meter</div>
+            </div>
+        ` : `
+            <div class="empty-state py-3">
+                <i class="bi bi-geo-alt"></i>
+                <div class="fw-semibold mb-1">Belum aktif</div>
+                <div class="small">Admin/server belum mengaktifkan pembatas lokasi absensi.</div>
+            </div>
         `;
     }
 
@@ -387,6 +449,7 @@
         renderNotice(context);
         renderStatus(context);
         renderWindow(context);
+        renderLocationStatus();
         renderActiveQr(context);
     }
 
@@ -404,16 +467,56 @@
             });
     }
 
-    function processQRCode(code) {
+    function getCurrentLocationPayload() {
+        if (!attendanceLocationConfig.enabled) {
+            return Promise.resolve({});
+        }
+
+        if (!navigator.geolocation) {
+            return Promise.reject(new Error('Browser/perangkat ini tidak mendukung akses lokasi.'));
+        }
+
+        return new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(
+                position => resolve({
+                    location_latitude: position.coords.latitude,
+                    location_longitude: position.coords.longitude,
+                    location_accuracy: position.coords.accuracy
+                }),
+                () => reject(new Error('Izin lokasi ditolak atau posisi perangkat belum bisa dibaca.')),
+                {
+                    enableHighAccuracy: true,
+                    timeout: 12000,
+                    maximumAge: 0
+                }
+            );
+        });
+    }
+
+    async function processQRCode(code) {
+        let locationPayload = {};
+        try {
+            locationPayload = await getCurrentLocationPayload();
+        } catch (error) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Lokasi diperlukan',
+                text: error.message || 'Aktifkan izin lokasi lalu coba lagi.'
+            });
+            return;
+        }
+
         $.post('/attendance/scan', {
             code,
+            ...locationPayload,
             _token: document.querySelector('meta[name="csrf-token"]').getAttribute('content')
         })
             .done(response => {
+                const locationText = buildLocationResultHtml(response);
                 Swal.fire({
                     icon: 'success',
                     title: response.message,
-                    html: `<div class="small">Status: <strong>${getStatusText(response.status)}</strong><br>Waktu: <strong>${response.check_in_time || response.check_out_time}</strong></div>`
+                    html: `<div class="small">Status: <strong>${getStatusText(response.status)}</strong><br>Waktu: <strong>${response.check_in_time || response.check_out_time}</strong>${locationText}</div>`
                 }).then(() => loadTodayStatus(true));
             })
             .fail(xhr => {
@@ -430,7 +533,7 @@
                 Swal.fire({
                     icon: 'error',
                     title: 'Absensi gagal',
-                    text: xhr.responseJSON?.message || 'Terjadi kesalahan saat memproses absensi.'
+                    html: `<div class="small">${escapeHtml(xhr.responseJSON?.message || 'Terjadi kesalahan saat memproses absensi.')}${buildLocationResultHtml(xhr.responseJSON)}</div>`
                 });
             });
     }

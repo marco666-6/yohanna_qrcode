@@ -55,10 +55,12 @@
         </div>
         <div class="col-6 col-xl-3">
             <div class="stat-card info">
-                <div class="stat-icon"><i class="bi bi-diagram-3"></i></div>
-                <div class="stat-value">{{ $shifts->count() }}</div>
-                <div class="stat-label">Shift aktif</div>
-                <div class="stat-helper">Siap dipilih untuk check-in/check-out.</div>
+                <div class="stat-icon"><i class="bi bi-geo-alt"></i></div>
+                <div class="stat-value">{{ config('attendance.location.enabled') ? config('attendance.location.radius_meters') : 'Off' }}</div>
+                <div class="stat-label">Validasi lokasi</div>
+                <div class="stat-helper">
+                    {{ config('attendance.location.enabled') ? 'Radius meter dari ' . config('attendance.location.label') . '.' : 'Belum aktif di konfigurasi server.' }}
+                </div>
             </div>
         </div>
     </div>
